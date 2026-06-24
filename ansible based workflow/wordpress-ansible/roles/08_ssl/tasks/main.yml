@@ -1,0 +1,184 @@
+---
+# =============================================================
+# ROLE: 08_ssl — Install Let's Encrypt SSL via Certbot
+# =============================================================
+
+# ── Pre-flight: verify DNS resolves to this server ───────────
+
+- name: "SSL | Look up DNS A record for {{ domain }}"
+  ansible.builtin.command:
+    cmd: "dig +short {{ domain }}"
+  register: dns_lookup
+  changed_when: false
+
+- name: "SSL | Print DNS resolution result"
+  ansible.builtin.debug:
+    msg:
+      - "Domain   : {{ domain }}"
+      - "Resolves : {{ dns_lookup.stdout }}"
+      - "Server   : {{ ansible_default_ipv4.address }}"
+
+- name: "SSL | Warn if DNS does not match server IP"
+  ansible.builtin.debug:
+    msg: >
+      WARNING: {{ domain }} resolves to {{ dns_lookup.stdout }}
+      but this server's IP is {{ ansible_default_ipv4.address }}.
+      Certbot will FAIL if DNS is not pointing to this server.
+      Make sure your domain's A record is correctly set before continuing.
+  when: dns_lookup.stdout != ansible_default_ipv4.address
+
+# ── Install Certbot ───────────────────────────────────────────
+
+- name: "SSL | Install Certbot and Nginx plugin"
+  ansible.builtin.dnf:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+
+# ── Temporarily serve HTTP for ACME challenge ─────────────────
+# Certbot needs port 80 open. We set a basic HTTP block before cert issuance.
+
+- name: "SSL | Deploy temporary HTTP-only Nginx config for ACME challenge"
+  ansible.builtin.copy:
+    dest: "/etc/nginx/conf.d/{{ wp_sitename }}_temp.conf"
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      server {
+          listen 80;
+          server_name {{ domain }} {{ domain_www }};
+          root {{ site_root }};
+          index index.php index.html;
+          location /.well-known/acme-challenge/ {
+              root {{ site_root }};
+          }
+          location / {
+              try_files $uri $uri/ /index.php?$args;
+          }
+          location ~ \.php$ {
+              fastcgi_pass unix:{{ php_fpm_socket }};
+              fastcgi_index index.php;
+              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+              include fastcgi_params;
+          }
+      }
+
+- name: "SSL | Temporarily remove the main HTTPS config (avoid 443 conflict)"
+  ansible.builtin.command:
+    cmd: "mv /etc/nginx/conf.d/{{ wp_sitename }}.conf /etc/nginx/conf.d/{{ wp_sitename }}.conf.bak"
+  args:
+    creates: "/etc/nginx/conf.d/{{ wp_sitename }}.conf.bak"
+  ignore_errors: true
+
+- name: "SSL | Reload Nginx with temp HTTP config"
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+
+# ── Obtain Certificate ────────────────────────────────────────
+
+- name: "SSL | Obtain Let's Encrypt certificate via Certbot"
+  ansible.builtin.command:
+    cmd: >
+      certbot certonly
+      --webroot
+      --webroot-path={{ site_root }}
+      --domains {{ domain }},{{ domain_www }}
+      --email {{ ssl_email }}
+      --agree-tos
+      --non-interactive
+      --no-eff-email
+    creates: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: certbot_result
+
+- name: "SSL | Print Certbot output"
+  ansible.builtin.debug:
+    msg: "{{ certbot_result.stdout_lines | default(['Certificate already exists or was just created.']) }}"
+
+# ── Restore Production Nginx Config with SSL ──────────────────
+
+- name: "SSL | Remove temporary HTTP-only Nginx config"
+  ansible.builtin.file:
+    path: "/etc/nginx/conf.d/{{ wp_sitename }}_temp.conf"
+    state: absent
+
+- name: "SSL | Restore main Nginx config with SSL blocks"
+  ansible.builtin.command:
+    cmd: "mv /etc/nginx/conf.d/{{ wp_sitename }}.conf.bak /etc/nginx/conf.d/{{ wp_sitename }}.conf"
+  args:
+    creates: "/etc/nginx/conf.d/{{ wp_sitename }}.conf"
+  ignore_errors: true
+
+- name: "SSL | Re-deploy main Nginx config from template (fresh, with SSL)"
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/roles/04_nginx/templates/wordpress.conf.j2"
+    dest: "/etc/nginx/conf.d/{{ wp_sitename }}.conf"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: "SSL | Test Nginx config after SSL changes"
+  ansible.builtin.command:
+    cmd: nginx -t
+  register: nginx_ssl_test
+  changed_when: false
+  failed_when: nginx_ssl_test.rc != 0
+
+- name: "SSL | Reload Nginx with full SSL config"
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+
+# ── Update WordPress URLs to HTTPS ────────────────────────────
+
+- name: "SSL | Update WordPress siteurl to HTTPS"
+  ansible.builtin.command:
+    cmd: "wp option update siteurl 'https://{{ domain }}' --path={{ site_root }} --allow-root"
+  changed_when: true
+
+- name: "SSL | Update WordPress home URL to HTTPS"
+  ansible.builtin.command:
+    cmd: "wp option update home 'https://{{ domain }}' --path={{ site_root }} --allow-root"
+  changed_when: true
+
+# ── Auto-Renewal Setup ────────────────────────────────────────
+
+- name: "SSL | Add Certbot renewal cron job"
+  ansible.builtin.cron:
+    name: "Certbot SSL auto-renewal"
+    minute: "0"
+    hour: "3"
+    day: "*"
+    month: "*"
+    weekday: "*"
+    user: root
+    job: "certbot renew --quiet --post-hook 'systemctl reload nginx'"
+    state: present
+
+- name: "SSL | Test Certbot renewal (dry run)"
+  ansible.builtin.command:
+    cmd: certbot renew --dry-run
+  register: certbot_renew_test
+  changed_when: false
+  failed_when: false
+
+- name: "SSL | Print renewal dry-run result"
+  ansible.builtin.debug:
+    msg: "{{ certbot_renew_test.stdout_lines | default(['Renewal dry-run complete.']) }}"
+
+# ── Verify SSL ────────────────────────────────────────────────
+
+- name: "SSL | Verify certificate file exists"
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+  register: cert_stat
+
+- name: "SSL | Print SSL verification result"
+  ansible.builtin.debug:
+    msg:
+      - "Certificate file exists : {{ cert_stat.stat.exists }}"
+      - "Certificate path        : /etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+      - "Site is now live at     : https://{{ domain }}"
+      - "WordPress admin at      : https://{{ domain }}/wp-admin"

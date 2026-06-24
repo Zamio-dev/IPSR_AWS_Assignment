@@ -1,0 +1,119 @@
+---
+# =============================================================
+# ROLE: 03_php — Install PHP 8.3 via Remi + configure PHP-FPM
+# =============================================================
+
+- name: "PHP | Enable PHP 8.3 module from Remi"
+  ansible.builtin.command:
+    cmd: dnf module enable php:remi-8.3 -y
+  register: php_module_result
+  changed_when: "'Enabling' in php_module_result.stdout or php_module_result.rc == 0"
+
+- name: "PHP | Install PHP 8.3 and all WordPress-required extensions"
+  ansible.builtin.dnf:
+    name:
+      - php
+      - php-fpm
+      - php-mysqlnd        # MySQL/MariaDB driver
+      - php-xml            # XML processing
+      - php-json           # JSON support
+      - php-mbstring       # Multi-byte strings
+      - php-curl           # HTTP requests
+      - php-zip            # ZIP file support
+      - php-gd             # Image processing
+      - php-intl           # Internationalization
+      - php-opcache        # Opcode caching
+      - php-sodium         # Encryption
+      - php-bcmath         # Arbitrary precision math
+      - php-imagick        # ImageMagick integration
+    state: present
+  notify: restart php-fpm
+
+- name: "PHP | Verify PHP version is 8.x or higher"
+  ansible.builtin.command:
+    cmd: php -v
+  register: php_version_output
+  changed_when: false
+
+- name: "PHP | Assert PHP 8.x is installed"
+  ansible.builtin.assert:
+    that:
+      - "'PHP 8.' in php_version_output.stdout"
+    fail_msg: "PHP 8.x was not installed correctly. Found: {{ php_version_output.stdout }}"
+    success_msg: "PHP version verified: {{ php_version_output.stdout.split('\n')[0] }}"
+
+- name: "PHP | Disable default www.conf PHP-FPM pool"
+  ansible.builtin.command:
+    cmd: mv /etc/php-fpm.d/www.conf /etc/php-fpm.d/www.conf.disabled
+    creates: /etc/php-fpm.d/www.conf.disabled
+
+- name: "PHP | Create PHP-FPM socket directory"
+  ansible.builtin.file:
+    path: /var/run/php-fpm
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: "PHP | Create dedicated PHP-FPM pool for the website user"
+  ansible.builtin.copy:
+    dest: "/etc/php-fpm.d/{{ wp_username }}.conf"
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      ; =============================================================
+      ; PHP-FPM Pool: {{ wp_username }}
+      ; Dedicated pool for website user — runs as the site owner
+      ; =============================================================
+      [{{ wp_username }}]
+      user = {{ wp_username }}
+      group = {{ wp_username }}
+      listen = {{ php_fpm_socket }}
+      listen.owner = nginx
+      listen.group = nginx
+      listen.mode = 0660
+
+      ; Process management
+      pm = dynamic
+      pm.max_children = 5
+      pm.start_servers = 2
+      pm.min_spare_servers = 1
+      pm.max_spare_servers = 3
+      pm.max_requests = 500
+
+      ; Logging
+      php_admin_value[error_log] = {{ site_logs }}/php-error.log
+      php_admin_flag[log_errors] = on
+
+      ; Session handling
+      php_value[session.save_handler] = files
+      php_value[session.save_path]    = {{ site_tmp }}
+
+      ; Upload and execution limits (important for WordPress media)
+      php_value[upload_max_filesize] = 64M
+      php_value[post_max_size]       = 64M
+      php_value[memory_limit]        = 256M
+      php_value[max_execution_time]  = 300
+      php_value[max_input_time]      = 300
+  notify: restart php-fpm
+
+- name: "PHP | Configure php.ini — upload limits"
+  ansible.builtin.lineinfile:
+    path: /etc/php.ini
+    regexp: "^{{ item.key }}"
+    line: "{{ item.key }} = {{ item.value }}"
+    state: present
+  loop:
+    - { key: "upload_max_filesize", value: "64M" }
+    - { key: "post_max_size",       value: "64M" }
+    - { key: "memory_limit",        value: "256M" }
+    - { key: "max_execution_time",  value: "300" }
+    - { key: "date.timezone",       value: "Asia/Kolkata" }
+  notify: restart php-fpm
+
+- name: "PHP | Start and enable PHP-FPM"
+  ansible.builtin.service:
+    name: php-fpm
+    state: started
+    enabled: true

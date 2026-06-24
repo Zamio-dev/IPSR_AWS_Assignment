@@ -1,0 +1,113 @@
+---
+# =============================================================
+# ROLE: 07_phpmyadmin — Install and configure phpMyAdmin
+# =============================================================
+
+- name: "PHPMYADMIN | Create installation directory"
+  ansible.builtin.file:
+    path: /usr/share/phpmyadmin
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: '0755'
+
+- name: "PHPMYADMIN | Get latest phpMyAdmin version number"
+  ansible.builtin.uri:
+    url: https://www.phpmyadmin.net/home_page/version.txt
+    return_content: true
+  register: pma_version_response
+
+- name: "PHPMYADMIN | Set phpMyAdmin version fact"
+  ansible.builtin.set_fact:
+    pma_version: "{{ pma_version_response.content.split('\n')[0] | trim }}"
+
+- name: "PHPMYADMIN | Print version being installed"
+  ansible.builtin.debug:
+    msg: "Installing phpMyAdmin version: {{ pma_version }}"
+
+- name: "PHPMYADMIN | Download phpMyAdmin {{ pma_version }}"
+  ansible.builtin.get_url:
+    url: "https://files.phpmyadmin.net/phpMyAdmin/{{ pma_version }}/phpMyAdmin-{{ pma_version }}-all-languages.tar.gz"
+    dest: "/tmp/phpmyadmin-{{ pma_version }}.tar.gz"
+    mode: '0644'
+    timeout: 120
+
+- name: "PHPMYADMIN | Extract phpMyAdmin archive"
+  ansible.builtin.unarchive:
+    src: "/tmp/phpmyadmin-{{ pma_version }}.tar.gz"
+    dest: /tmp/
+    remote_src: true
+    creates: "/tmp/phpMyAdmin-{{ pma_version }}-all-languages/index.php"
+
+- name: "PHPMYADMIN | Copy phpMyAdmin files to /usr/share/phpmyadmin/"
+  ansible.posix.synchronize:
+    src: "/tmp/phpMyAdmin-{{ pma_version }}-all-languages/"
+    dest: /usr/share/phpmyadmin/
+    recursive: true
+    delete: false
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: "PHPMYADMIN | Create tmp directory (required by phpMyAdmin)"
+  ansible.builtin.file:
+    path: /usr/share/phpmyadmin/tmp
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: '0777'
+
+- name: "PHPMYADMIN | Generate blowfish secret (32 characters)"
+  ansible.builtin.set_fact:
+    pma_blowfish: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+
+- name: "PHPMYADMIN | Deploy phpMyAdmin config from template"
+  ansible.builtin.template:
+    src: config.inc.php.j2
+    dest: /usr/share/phpmyadmin/config.inc.php
+    owner: nginx
+    group: nginx
+    mode: '0640'
+
+- name: "PHPMYADMIN | Set ownership of all phpMyAdmin files"
+  ansible.builtin.file:
+    path: /usr/share/phpmyadmin
+    owner: nginx
+    group: nginx
+    recurse: true
+
+- name: "PHPMYADMIN | Set SELinux context on phpMyAdmin directory"
+  ansible.builtin.command:
+    cmd: "chcon -R -t httpd_sys_content_t /usr/share/phpmyadmin/"
+  changed_when: true
+
+- name: "PHPMYADMIN | Set SELinux context on tmp directory (writable)"
+  ansible.builtin.command:
+    cmd: "chcon -R -t httpd_sys_rw_content_t /usr/share/phpmyadmin/tmp/"
+  changed_when: true
+
+- name: "PHPMYADMIN | Create HTTP Basic Auth password file"
+  ansible.builtin.command:
+    cmd: "htpasswd -bc /etc/nginx/.htpasswd {{ pma_htpasswd_user }} {{ pma_htpasswd_password }}"
+  args:
+    creates: /etc/nginx/.htpasswd
+  changed_when: true
+
+- name: "PHPMYADMIN | Set .htpasswd file permissions"
+  ansible.builtin.file:
+    path: /etc/nginx/.htpasswd
+    owner: nginx
+    group: nginx
+    mode: '0640'
+
+- name: "PHPMYADMIN | Reload Nginx to apply phpMyAdmin config"
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+
+- name: "PHPMYADMIN | Print phpMyAdmin credentials"
+  ansible.builtin.debug:
+    msg:
+      - "phpMyAdmin URL        : http://{{ domain }}:{{ pma_port }}"
+      - "Basic Auth Username   : {{ pma_htpasswd_user }}"
+      - "Basic Auth Password   : {{ pma_htpasswd_password }}"
+      - "DB Username           : {{ db_user }}"
+      - "DB Password           : {{ db_password }}"

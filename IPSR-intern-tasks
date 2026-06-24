@@ -1,0 +1,282 @@
+Task #48790
+Git configuration
+Description
+1. sign up to the GITHUB and create a project repository.
+2. install and configure GIT version control system in your local machine.
+3. Verify the configurations by cloning the remote repository
+4. try to add local files to the remote repository as vice versa.
+Note: Learn more about important GIT commands.
+
+
+Task #48785
+Docker basics and installation
+Description
+1. Research and study the basics of Docker Containerization platform .
+2. install docker on your machine
+3.build a container from the available docker images.
+4.study basic docker commands
+
+Task #48782
+Session: cPanel,WHM
+Description
+1.5 hour session dealing with the basics of WHM/CPANEL Administration.
+Resource Person: Server Administrator [ IPSR Solutions Limited ]
+
+
+Task #48802
+LAMPP Installation
+Description
+Install the following packages and host a sample dynamic website with help of database.
+1. Install Apache Webserver
+2. Install PHP
+3. Install MySQL/MariaDB
+Configuration files, xtensions and versions should be noticed.
+
+Task #48794
+Session: Web Hosting and DNS
+Description
+1.5 Hours session dealing with the Basics of web hosting and DNS.
+Resource Person: Server Administrator [ IPSR Solutions Limited ]
+
+
+Task #48799
+Implement NAT Gateway Setup
+Description
+i. Create two instances, one in a public subnet and one in a private subnet
+ii. Host a website inside public web server
+iii. Host a database inside private database server
+iv. Connect to DB server only from its webserver, shouldn't have a public access to server even if the security group has open entries
+v. DB Server should have internet access. Try to update the software packages, patching, etc
+
+Task #48798
+FTP server configuration
+Description
+GOAL: Enable file transaction to servers using file transfer protocol[FTP]
+1. configure sftp in an instance such that, it can receive files via port number 22 to the specific directory as the specific user.ie, the sftp users have restricted privileges.
+2. verify the working with any FTP client like filezilla, cyberduck etc.
+3. install and configure vsftp in an instance such that, it can receive files very securely via port 21 to the configured directory as configures user.for Vsftp also privileges are restricted.
+4. verify the working with any FTP client.
+
+
+Task #48797
+Hosting Errors
+Description
+1. Research and learn about the error's rises regarding with website hosting.
+2. study well about the error's within the error code range 300 - 500.
+eg: 500- internal server error
+      404- file not found error
+3.also note down the cause of this errors,as well as the trouble shooting methods.
+
+
+Task #48796
+Troubleshooting and security implementation in Linux
+Description
+1. Learn deeply about the different type of logs in linux systems.also learn the real time monitoring of logs as well as the journals.
+Note: Logs are found under /var/log/
+2.install and configure commonly using firewalls such as CSF and APF. try to manage different services via the same.
+3.learn the management of incoming and and outgoing services to an aws instance with security groups.
+4.learn about external server attacks and their prevention parameters.
+eg: phishing attack, bruteforce attack etc.
+
+
+Task #48791
+Create IAM users and give specific permissions as per need
+Description
+1. create an IAM user from the Root aws account.
+2. set the policy or permission to the user, so that it can only access aws-Ec2 service.[ Restricted privileges]
+3. login as the IAM user and verify the working of the policies attached with the user.
+NOTE: try the foolowing
+1. IAM user with AWS management console access 
+2. IAM user with Programmatic access.
+
+
+Task #48788
+Schedule a Server start/Stop function using Lambda and CloudWatch
+Description
+GOAL: automate the start/stop of ec2 instances using lambda and cloudwatch services.
+1.create required IAM policies and Roles.
+2.create function under aws-lambda which determines the start/stop process of specific ec2-instance.
+3.test the function created under lambda
+4.create rules inside cloudwatch service which trigger the function created in lambda.{ cron }
+
+
+Task #48786
+Server Monitoring tool
+Description
+1. install and check the functioning of server monitoring tools like
+	a.Nagios
+	b.Zabbix
+2.Deeply study the commands used to monitor the server as well as the services.
+
+
+Task #48784
+Disk space utilzation notification using SNS
+Description
+1. create a script on your instance which writes the disk usage to a file and send an email to specific mail.
+2. verify the recipient mail id in SNS console
+3. configure simple notification service[SNS] For delivering the mail notifications.
+4. verify the mail sent
+
+
+Task #48783
+Host a website or WebApp using Nginx
+Description
+1.Install Nginx web server on your local machine
+2. Host a simple website[index.html] in the default document root, by using Nginx web server.call the website using "firstnginx.test"
+3.study in deep about nginx service, hosting types and default configurations in Nginx web server
+
+
+Task #48778
+Server tuning
+Description
+Learn about different tuning methods
+1.Pagespeed
+2.Gzip compression
+3.tuned daemon
+etc
+
+-->
+Task #48779
+Jenkins Basics
+Description
+1. learn the basics of jenkins automation server
+2. learn about commonly using CI/CI deployment method with jenkins.
+3. install jenkins on your machine
+
+
+Task #48777
+Main project - Using ansible
+Description
+Instructions:
+1. Install the necessary packages, which include MySQL 10.6, PHP version 8 or higher, and Nginx on your Linux server.
+2. Create a user's home directory under the '/home' directory. You should set the root directory for the website to be '/home/username/websitename/public.'
+3. Configure SFTP (Secure File Transfer Protocol) access for the user to ensure secure file management.
+4. Configure phpmyadmin access for the user to ensure secure database management.
+4. Install a free SSL certificate to enable secure HTTPS access to your website.
+5. Once the website is hosted, proceed to the WordPress dashboard to make necessary configurations and customizations.
+6. Write a personal blog post about yourself using the WordPress content management system.
+
+
+Task #48804
+Booting process ,Ports and Server Admin commands
+Description
+Study in details:
+- Booting Process in Linux (Steps in detail)
+ - Important Port Numbers
+ - Some Advanced Server Administrator commands for troubleshooting and monitoring
+
+Task #48803
+Introduction to Web Hosting
+Description
+i. Install Apache Web Server
+ii. Create an index.html page in default document root
+iii. Access the website using mysamplewebsite.itfs
+Note: Create a custom Virtual Hosting configuration File
+Keep backup of system configuration files before editing
+Study in detail about Apache default files, document root and modules
+
+Task #48803
+Description
+i. Install Apache Web Server
+ii. Create an index.html page in default document root
+iii. Access the website using mysamplewebsite.itfs
+Note: Create a custom Virtual Hosting configuration File
+Keep backup of system configuration files before editing
+Study in detail about Apache default files, document root and modules
+
+
+Task #48801
+Virtual Hosting in User Directory
+Description
+Host a simple PHP website in a user home directory.
+1. Create a new user named Alice
+2. Create a sample web page under a directory named public_html (/home/Alice/public_html)
+3. Access the website using URL: myfirstwebsite.test and www.myfirstwebsite.test
+Webpage content:
+--------------------
+phpinfo();
+?>
+
+Task #48800
+WordPress hosting with AWS RDS
+Description
+i. Launch a AWS instances (OS can choose by your choice)
+ii. Host WordPress files under a user directory
+iii. Create an RDS instance
+iv. Connect RDS Database with your WordPress and run webpage using URL myawshosting.net
+NB: Only Minimum access is granted
+
+Task #48795
+Static Website hosting with AWS S3
+Description
+1. Create a S3 bucket inside your aws instace.
+2. change the properties of bucket so that it allows website hosting.
+3. add a simple static website to the S3 created.
+Note: try with a simple index.html file.
+4. check the required permission/access control of the bucket.
+5. verify the working using the endpoint of bucket.
+
+
+Task #48795
+Static Website hosting with AWS S3
+Description
+1. Create a S3 bucket inside your aws instace.
+2. change the properties of bucket so that it allows website hosting.
+3. add a simple static website to the S3 created.
+Note: try with a simple index.html file.
+4. check the required permission/access control of the bucket.
+5. verify the working using the endpoint of bucket.
+
+
+
+Task #48793
+Backup scripting with S3 Synchronization
+Description
+GOAL: To move/sync the backups taken in server to the S3 bucket.
+1. create an IAM Role which allows access to S3, and attach with your aws instance.
+2. login to the console[CLI] of the server and configure a mariadb server.
+3. write a shell script for taking up the backups of databases to a directory.
+4. configure aws-cli within the server and synchronize the backup directory with any of the aws s3 buckets.
+5. verify the backups in S3.
+
+
+
+Task #48792
+Application Load Balancer with AutoScaling for a PHP WebApp
+Description
+1.host a simple php web application in the aws instance
+2.configure an Application load balacer for the instance containing web application.
+3.create an auto scaling group with scaling policies for the application instance.
+4.attach the load balancer with auto scaling group.
+5.verify the working of scaling policies by increasing the load manually.
+
+
+
+Task #48789
+Send a sample Email in PHP using SES
+Description
+GOAL: send an email to the verified address using aws-SES with php
+1. verify the recipient address inside simple email service[SES].
+2. Get your smpt credentials ( from SES console)
+3. install php and other required dependencies in your machine
+4. try to send mail by creating and executing a php file [ refer aws docs for the information about the file and its contents ]
+
+
+Task #48787
+Save an Elastic Beanstalk Environment Configuration and load it after making few changes
+Description
+1.create an environment inside beanstalk console.
+2.choose the created environment for further changes and save configuration once the changes are completed.
+
+
+
+Task #48781
+Disk sharing using EBS and EFS
+Description
+GOAL: configure a EBS such that, it can be shared between different instances.
+1.Create and set up an EBS such that it should be "Multi-Attach" enabled.
+2.verify the working
+3.study about Elastic File System in AWS.
+4.configure an EFS shared between different ec2 instances.
+
+

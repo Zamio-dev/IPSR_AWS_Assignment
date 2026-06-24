@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SysWatch — Server Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060a12;--surface:#0c1220;--surface2:#111827;--surface3:#161f30;
+  --border:#1a2744;--border-b:#243560;
+  --text:#c8d6e5;--dim:#4a6080;--dimmer:#2a3f60;
+  --green:#00ff88;--green2:#00cc66;--green-glow:rgba(0,255,136,0.18);
+  --amber:#ffb300;--amber2:#ff8f00;--amber-glow:rgba(255,179,0,0.18);
+  --red:#ff1744;--red2:#c62828;--red-glow:rgba(255,23,68,0.18);
+  --cyan:#00e5ff;--cyan2:#0097a7;--cyan-glow:rgba(0,229,255,0.18);
+  --purple:#7c4dff;
+  --mono:'Share Tech Mono',monospace;
+  --display:'Orbitron',monospace;
+}
+html{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;overflow-x:hidden}
+body{display:flex;flex-direction:column;min-height:100vh;background:
+  radial-gradient(ellipse 80% 40% at 50% -10%,rgba(0,229,255,0.05) 0%,transparent 70%),
+  radial-gradient(ellipse 60% 60% at 80% 100%,rgba(0,255,136,0.04) 0%,transparent 60%),
+  var(--bg);
+}
+
+/* ── KEY SCREEN ── */
+#keyscreen{position:fixed;inset:0;z-index:999;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:24px;
+}
+.ks-box{background:var(--surface);border:1px solid var(--border);border-radius:6px;
+  padding:36px 40px;display:flex;flex-direction:column;gap:18px;min-width:380px;
+}
+.ks-logo{font-family:var(--display);font-size:1.6em;font-weight:900;letter-spacing:.15em;
+  color:var(--green);text-shadow:0 0 20px var(--green);text-align:center;
+}
+.ks-logo span{color:var(--cyan)}
+.ks-desc{font-size:.82em;color:var(--dim);line-height:1.7;text-align:center}
+.ks-label{font-size:.75em;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.ks-input{background:var(--bg);border:1px solid var(--border-b);color:var(--text);
+  font-family:var(--mono);font-size:.9em;padding:10px 14px;border-radius:4px;
+  width:100%;outline:none;letter-spacing:.05em;
+}
+.ks-input:focus{border-color:var(--green);box-shadow:0 0 0 2px rgba(0,255,136,.1)}
+.ks-btn{background:rgba(0,255,136,.1);border:1px solid var(--green);color:var(--green);
+  font-family:var(--mono);font-size:.85em;padding:10px;border-radius:4px;
+  cursor:pointer;letter-spacing:.12em;text-transform:uppercase;transition:all .2s;
+}
+.ks-btn:hover{background:rgba(0,255,136,.2);box-shadow:0 0 12px var(--green-glow)}
+.ks-err{color:var(--red);font-size:.78em;text-align:center;min-height:16px}
+.ks-hint{font-size:.73em;color:var(--dimmer);text-align:center;line-height:1.6}
+.ks-hint code{color:var(--amber);font-family:var(--mono)}
+
+/* ── API STATUS BAR ── */
+#api-status{display:flex;align-items:center;gap:8px;font-size:.75em}
+.api-dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.api-dot.live{background:var(--green);animation:apulse 2s infinite;box-shadow:0 0 8px var(--green)}
+.api-dot.error{background:var(--red);animation:apulse 1s infinite}
+@keyframes apulse{0%,100%{opacity:1}50%{opacity:.35}}
+#api-label{color:var(--dim);letter-spacing:.05em}
+
+/* ── TOPBAR ── */
+#topbar{display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;height:52px;background:var(--surface);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 20px rgba(0,0,0,0.5);
+}
+#logo{font-family:var(--display);font-size:1.15em;font-weight:900;letter-spacing:.12em;
+  color:var(--green);text-shadow:0 0 20px var(--green);cursor:pointer;
+}
+#logo span{color:var(--cyan);text-shadow:0 0 20px var(--cyan)}
+nav{display:flex;gap:4px}
+.nav-btn{background:none;border:1px solid transparent;color:var(--dim);
+  font-family:var(--mono);font-size:.85em;padding:6px 16px;cursor:pointer;
+  letter-spacing:.08em;text-transform:uppercase;transition:all .2s;border-radius:3px;
+}
+.nav-btn:hover{color:var(--cyan);border-color:var(--border-b)}
+.nav-btn.active{color:var(--green);border-color:var(--green);
+  background:var(--green-glow);text-shadow:0 0 10px var(--green);
+  box-shadow:0 0 12px var(--green-glow);
+}
+#topright{display:flex;align-items:center;gap:20px;font-size:.8em;color:var(--dim)}
+#clock{font-family:var(--display);font-size:.9em;color:var(--cyan);letter-spacing:.1em}
+.host-info{color:var(--dimmer);letter-spacing:.05em}
+
+/* ── LAYOUT ── */
+#app{flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.page{display:none;flex-direction:column;gap:14px}
+.page.active{display:flex}
+
+/* ── CARDS ── */
+.cards{display:grid;gap:12px}
+.cards-3{grid-template-columns:repeat(3,1fr)}
+.cards-4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:4px;
+  padding:14px 18px;position:relative;overflow:hidden;transition:border-color .3s;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.card.green::before{background:var(--green);box-shadow:0 0 10px var(--green)}
+.card.amber::before{background:var(--amber);box-shadow:0 0 10px var(--amber)}
+.card.red::before{background:var(--red);box-shadow:0 0 10px var(--red)}
+.card.cyan::before{background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.card.purple::before{background:var(--purple);box-shadow:0 0 10px var(--purple)}
+.card-label{font-size:.72em;color:var(--dim);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px}
+.card-value{font-family:var(--display);font-size:2em;font-weight:700;line-height:1}
+.card-value.green{color:var(--green);text-shadow:0 0 15px var(--green)}
+.card-value.amber{color:var(--amber);text-shadow:0 0 15px var(--amber)}
+.card-value.red{color:var(--red);text-shadow:0 0 15px var(--red)}
+.card-value.cyan{color:var(--cyan);text-shadow:0 0 15px var(--cyan)}
+.card-value.purple{color:var(--purple);text-shadow:0 0 15px var(--purple)}
+.card-sub{font-size:.75em;color:var(--dim);margin-top:6px}
+.card-bar{height:3px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden}
+.card-bar-fill{height:100%;border-radius:2px;transition:width .8s ease}
+
+/* ── SECTION HEADS ── */
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.section-title{font-family:var(--display);font-size:.78em;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--dim);display:flex;align-items:center;gap:8px}
+.section-title .dot{width:7px;height:7px;border-radius:50%;animation:pulse 2s infinite}
+.dot.green{background:var(--green);box-shadow:0 0 8px var(--green)}
+.dot.amber{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.dot.red{background:var(--red);box-shadow:0 0 8px var(--red)}
+.dot.cyan{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── CHARTS ── */
+.chart-panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:16px}
+.chart-wrap{position:relative;width:100%}
+.chart-wrap canvas{width:100%!important}
+
+/* ── GRIDS ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid-65-35{display:grid;grid-template-columns:1.8fr 1fr;gap:14px}
+
+/* ── PROCESS TABLE ── */
+.proc-panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.proc-header-bar{display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;background:var(--surface2);border-bottom:1px solid var(--border)}
+.proc-search{background:var(--bg);border:1px solid var(--border);color:var(--text);
+  font-family:var(--mono);font-size:.82em;padding:4px 10px;border-radius:3px;width:180px;outline:none}
+.proc-search:focus{border-color:var(--cyan)}
+.proc-count{font-size:.75em;color:var(--dim)}
+.proc-table-wrap{max-height:300px;overflow-y:auto}
+.proc-table-wrap::-webkit-scrollbar{width:5px}
+.proc-table-wrap::-webkit-scrollbar-track{background:var(--bg)}
+.proc-table-wrap::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:3px}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--surface2);position:sticky;top:0;z-index:5}
+thead th{padding:7px 12px;text-align:left;font-family:var(--display);font-size:.68em;
+  letter-spacing:.15em;color:var(--dim);cursor:pointer;user-select:none;
+  border-bottom:1px solid var(--border);white-space:nowrap;transition:color .2s}
+thead th:hover{color:var(--cyan)}
+thead th.sort-asc,thead th.sort-desc{color:var(--green)}
+tbody tr{border-bottom:1px solid rgba(26,39,68,.5);transition:background .15s}
+tbody tr:hover{background:rgba(0,229,255,.04)}
+tbody tr.danger-row{background:rgba(255,23,68,.07)!important;
+  border-left:2px solid rgba(255,23,68,.5)}
+tbody td{padding:6px 12px;font-size:.82em;white-space:nowrap}
+.pid{color:var(--dimmer);font-size:.78em}
+.pname{color:var(--cyan);font-weight:bold}
+.badge{display:inline-block;padding:2px 7px;border-radius:2px;font-size:.72em;
+  letter-spacing:.1em;text-transform:uppercase}
+.badge-run{background:rgba(0,255,136,.12);color:var(--green);border:1px solid rgba(0,255,136,.25)}
+.badge-sleep{background:rgba(74,96,128,.15);color:var(--dim);border:1px solid var(--border)}
+.badge-stop,.badge-zombie{background:rgba(255,23,68,.12);color:var(--red);border:1px solid rgba(255,23,68,.25)}
+
+/* ── LOGS ── */
+.log-panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;display:flex;flex-direction:column}
+.log-box{font-size:.78em;line-height:1.85;overflow-y:auto;flex:1;padding:10px 14px;max-height:220px}
+.log-box::-webkit-scrollbar{width:4px}
+.log-box::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:2px}
+.log-entry{display:flex;gap:10px;padding:1px 0}
+.log-ts{color:var(--dimmer);flex-shrink:0;font-size:.88em}
+.log-tag{flex-shrink:0;font-family:var(--display);font-size:.7em;padding:1px 6px;
+  border-radius:2px;margin-top:1px;letter-spacing:.05em}
+.tag-info{background:rgba(0,229,255,.1);color:var(--cyan)}
+.tag-pass{background:rgba(0,255,136,.1);color:var(--green)}
+.tag-warn{background:rgba(255,179,0,.12);color:var(--amber)}
+.tag-alert{background:rgba(255,23,68,.12);color:var(--red)}
+.log-msg{color:var(--text);opacity:.85;word-break:break-all}
+
+/* ── DANGER ALERTS ── */
+.alert-section{display:none}
+.alert-section.has-alerts{display:block}
+.alert-panel{background:rgba(255,23,68,.07);border:1px solid rgba(255,23,68,.35);border-radius:4px;overflow:hidden}
+.alert-header{background:rgba(255,23,68,.12);padding:8px 14px;
+  display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,23,68,.25)}
+.alert-header-title{font-family:var(--display);font-size:.72em;letter-spacing:.18em;
+  color:var(--red);text-shadow:0 0 10px var(--red)}
+.alert-blink{animation:ablink 1s infinite}
+@keyframes ablink{0%,100%{opacity:1}50%{opacity:.3}}
+.alert-list{padding:8px 14px;display:flex;flex-direction:column;gap:6px}
+.alert-item{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;
+  background:rgba(255,23,68,.06);border:1px solid rgba(255,23,68,.2);border-radius:3px;font-size:.8em}
+.alert-icon{color:var(--red);font-size:1.1em;flex-shrink:0;margin-top:1px}
+.alert-body{flex:1}
+.alert-proc{color:var(--red);font-weight:bold}
+.alert-detail{color:var(--text);opacity:.75;margin-top:2px;font-size:.9em}
+.alert-time{color:var(--dimmer);font-size:.8em;flex-shrink:0;padding-left:10px;white-space:nowrap}
+
+/* ── MEMORY DONUT ── */
+.donut-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:8px}
+.donut-wrap canvas{max-width:180px!important;max-height:180px!important}
+.donut-legend{display:flex;flex-direction:column;gap:6px;width:100%;padding:0 8px}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:.78em}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.legend-label{color:var(--dim);flex:1}
+.legend-val{color:var(--text);font-family:var(--display);font-size:.88em}
+
+/* ── DISK BARS ── */
+.disk-part{margin-bottom:12px}
+.disk-part-head{display:flex;justify-content:space-between;margin-bottom:4px;font-size:.8em}
+.disk-part-name{color:var(--cyan)}
+.disk-bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+.disk-bar-fill{height:100%;border-radius:4px;transition:width 1s ease}
+
+/* ── CPU CORES ── */
+.core-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.core-item{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:8px}
+.core-label{font-size:.7em;color:var(--dim);margin-bottom:4px}
+.core-val{font-family:var(--display);font-size:.95em;font-weight:700}
+.core-bar{height:4px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+.core-bar-fill{height:100%;border-radius:2px;transition:width .8s ease}
+
+/* ── UPTIME STRIP ── */
+.uptime-strip{background:var(--surface2);border:1px solid var(--border);border-radius:3px;
+  padding:8px 14px;display:flex;align-items:center;gap:16px;font-size:.78em;flex-wrap:wrap}
+.uptime-strip span{color:var(--dim)}
+.uptime-strip strong{color:var(--green)}
+
+/* ── ERROR BANNER ── */
+#error-banner{display:none;background:rgba(255,23,68,.1);border:1px solid rgba(255,23,68,.4);
+  border-radius:4px;padding:10px 16px;font-size:.8em;color:var(--red);
+  align-items:center;gap:10px;}
+#error-banner.show{display:flex}
+
+/* ── MISC ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:3px}
+@media(max-width:900px){.cards-3,.cards-4{grid-template-columns:1fr 1fr}.grid-2,.grid-65-35{grid-template-columns:1fr}}
+.page.active .card,.page.active .chart-panel,.page.active .proc-panel,
+.page.active .log-panel,.page.active .alert-section{animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<!-- ── API KEY SCREEN ── -->
+<div id="keyscreen">
+  <div class="ks-box">
+    <div class="ks-logo">SYS<span>WATCH</span></div>
+    <div class="ks-desc">Enter your API key to connect to the local metrics backend.<br>The key is stored in session memory only and never sent anywhere except <code style="color:var(--amber)">127.0.0.1:5050</code>.</div>
+    <div>
+      <div class="ks-label">API Key</div>
+      <input class="ks-input" id="key-input" type="password" placeholder="paste your api key here…" autocomplete="off">
+    </div>
+    <button class="ks-btn" onclick="submitKey()">Connect to Backend →</button>
+    <div class="ks-err" id="ks-err"></div>
+    <div class="ks-hint">
+      Key is stored in <code>~/health-monitor/api/api.key</code><br>
+      Run <code>cat ~/health-monitor/api/api.key</code> to retrieve it
+    </div>
+  </div>
+</div>
+
+<!-- ── TOP BAR ── -->
+<div id="topbar" style="display:none">
+  <div id="logo" onclick="navigate('dashboard')">SYS<span>WATCH</span></div>
+  <nav>
+    <button class="nav-btn active" onclick="navigate('dashboard')">⬡ Dashboard</button>
+    <button class="nav-btn" onclick="navigate('cpu')">⬡ CPU</button>
+    <button class="nav-btn" onclick="navigate('memory')">⬡ Memory</button>
+    <button class="nav-btn" onclick="navigate('disk')">⬡ Disk</button>
+  </nav>
+  <div id="topright">
+    <div id="api-status"><div class="api-dot" id="api-dot"></div><span id="api-label">connecting…</span></div>
+    <div class="host-info" id="host-info">—</div>
+    <div id="clock">--:--:--</div>
+  </div>
+</div>
+
+<!-- ── MAIN APP ── -->
+<div id="app" style="display:none">
+
+  <!-- Error banner -->
+  <div id="error-banner">⚠ &nbsp;<span id="error-msg">API unreachable</span></div>
+
+  <!-- ═══ DASHBOARD PAGE ═══ -->
+  <div class="page active" id="page-dashboard">
+
+    <div class="cards cards-3">
+      <div class="card" id="card-cpu">
+        <div class="card-label">CPU Usage</div>
+        <div class="card-value" id="cv-cpu">—</div>
+        <div class="card-sub" id="cs-cpu">threshold: 80%</div>
+        <div class="card-bar"><div class="card-bar-fill" id="cb-cpu"></div></div>
+      </div>
+      <div class="card" id="card-mem">
+        <div class="card-label">Memory Usage</div>
+        <div class="card-value" id="cv-mem">—</div>
+        <div class="card-sub" id="cs-mem">—</div>
+        <div class="card-bar"><div class="card-bar-fill" id="cb-mem"></div></div>
+      </div>
+      <div class="card" id="card-disk">
+        <div class="card-label">Disk Usage (/)</div>
+        <div class="card-value" id="cv-disk">—</div>
+        <div class="card-sub" id="cs-disk">—</div>
+        <div class="card-bar"><div class="card-bar-fill" id="cb-disk"></div></div>
+      </div>
+    </div>
+
+    <div class="uptime-strip">
+      <span>UPTIME</span><strong id="uptime-val">—</strong>
+      <span>|</span><span>LOAD AVG</span><strong id="load-strip">—</strong>
+      <span>|</span><span>PROCS</span><strong id="proc-total">—</strong>
+      <span>|</span><span>HOSTNAME</span><strong id="hostname-val">—</strong>
+      <span>|</span><span>KERNEL</span><strong id="kernel-val">—</strong>
+    </div>
+
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title"><span class="dot green"></span>REAL-TIME RESOURCE USAGE — 60s WINDOW</div>
+        <div style="font-size:.73em;color:var(--dimmer)">
+          <span style="color:var(--green)">▬</span> CPU &nbsp;
+          <span style="color:var(--cyan)">▬</span> Memory &nbsp;
+          <span style="color:var(--amber)">▬</span> Disk
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:200px"><canvas id="chart-main"></canvas></div>
+    </div>
+
+    <!-- Danger alerts (global) -->
+    <div class="alert-section" id="dash-danger">
+      <div class="alert-panel">
+        <div class="alert-header">
+          <span class="alert-blink" style="color:var(--red);font-size:1.1em">⚠</span>
+          <span class="alert-header-title">⬡ DANGER ALERTS — RESOURCE SPIKE DETECTED</span>
+          <span style="margin-left:auto;font-size:.72em;color:var(--dimmer)">auto-clears after 5h</span>
+        </div>
+        <div class="alert-list" id="dash-alert-list"></div>
+      </div>
+    </div>
+
+    <!-- Process table -->
+    <div class="proc-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot cyan"></span>PROCESSES</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <input class="proc-search" placeholder="filter process…" id="proc-filter" oninput="renderProcTable('main')">
+          <span class="proc-count" id="proc-count">—</span>
+        </div>
+      </div>
+      <div class="proc-table-wrap">
+        <table>
+          <thead><tr>
+            <th onclick="setSort('pid','main')">PID <span id="sh-pid"></span></th>
+            <th onclick="setSort('name','main')">PROCESS <span id="sh-name"></span></th>
+            <th onclick="setSort('cpu','main')">CPU % <span id="sh-cpu"></span></th>
+            <th onclick="setSort('mem_mb','main')">MEM (MB) <span id="sh-mem_mb"></span></th>
+            <th onclick="setSort('disk_mb','main')">DISK I/O (MB) <span id="sh-disk_mb"></span></th>
+            <th onclick="setSort('status','main')">STATUS <span id="sh-status"></span></th>
+          </tr></thead>
+          <tbody id="proc-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Logs -->
+    <div class="log-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot green"></span>SYSTEM LOG — LATEST ENTRIES</div>
+        <span style="font-size:.72em;color:var(--dimmer)">health.log · last 20</span>
+      </div>
+      <div class="log-box" id="log-main"></div>
+    </div>
+
+  </div><!-- /dashboard -->
+
+  <!-- ═══ CPU PAGE ═══ -->
+  <div class="page" id="page-cpu">
+    <div class="cards cards-4">
+      <div class="card green">
+        <div class="card-label">Current CPU</div>
+        <div class="card-value green" id="cpu-pct-card">—</div>
+        <div class="card-sub">threshold: 80%</div>
+        <div class="card-bar"><div class="card-bar-fill" id="cpb-current"></div></div>
+      </div>
+      <div class="card cyan">
+        <div class="card-label">1m Load Avg</div>
+        <div class="card-value cyan" id="cpu-load1">—</div>
+        <div class="card-sub">system load</div>
+      </div>
+      <div class="card cyan">
+        <div class="card-label">5m Load Avg</div>
+        <div class="card-value cyan" id="cpu-load5">—</div>
+        <div class="card-sub">system load</div>
+      </div>
+      <div class="card cyan">
+        <div class="card-label">15m Load Avg</div>
+        <div class="card-value cyan" id="cpu-load15">—</div>
+        <div class="card-sub">system load</div>
+      </div>
+    </div>
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title"><span class="dot green"></span>CPU UTILISATION — 60s WINDOW</div>
+        <span style="font-size:.73em;color:var(--dimmer)" id="cpu-freq-label">—</span>
+      </div>
+      <div class="chart-wrap" style="height:180px"><canvas id="chart-cpu"></canvas></div>
+    </div>
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title"><span class="dot cyan"></span>CORE BREAKDOWN</div>
+        <span style="font-size:.72em;color:var(--dimmer)" id="cpu-core-label">—</span>
+      </div>
+      <div class="core-grid" id="core-grid"></div>
+    </div>
+    <div class="alert-section" id="cpu-danger">
+      <div class="alert-panel">
+        <div class="alert-header">
+          <span class="alert-blink" style="color:var(--red)">⚠</span>
+          <span class="alert-header-title">CPU DANGER ALERTS</span>
+          <span style="margin-left:auto;font-size:.72em;color:var(--dimmer)">auto-clears after 5h</span>
+        </div>
+        <div class="alert-list" id="cpu-alert-list"></div>
+      </div>
+    </div>
+    <div class="proc-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot green"></span>TOP CPU CONSUMERS</div>
+        <span class="proc-count">top 10 by cpu%</span>
+      </div>
+      <div class="proc-table-wrap">
+        <table><thead><tr>
+          <th>PID</th><th>PROCESS</th><th>USER</th><th>CPU %</th><th>MEM (MB)</th><th>STATUS</th>
+        </tr></thead>
+        <tbody id="cpu-proc-tbody"></tbody></table>
+      </div>
+    </div>
+    <div class="log-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot green"></span>CPU LOGS</div>
+      </div>
+      <div class="log-box" id="log-cpu"></div>
+    </div>
+  </div><!-- /cpu -->
+
+  <!-- ═══ MEMORY PAGE ═══ -->
+  <div class="page" id="page-memory">
+    <div class="cards cards-4">
+      <div class="card cyan">
+        <div class="card-label">Memory Used</div>
+        <div class="card-value cyan" id="mem-pct-card">—</div>
+        <div class="card-sub" id="mem-card-sub">—</div>
+        <div class="card-bar"><div class="card-bar-fill" id="mb-bar" style="background:var(--cyan)"></div></div>
+      </div>
+      <div class="card green">
+        <div class="card-label">Available</div>
+        <div class="card-value green" id="mem-avail">—</div>
+        <div class="card-sub">free + cache</div>
+      </div>
+      <div class="card amber">
+        <div class="card-label">Cached</div>
+        <div class="card-value amber" id="mem-cached">—</div>
+        <div class="card-sub">buffer/cache</div>
+      </div>
+      <div class="card purple">
+        <div class="card-label">Swap Used</div>
+        <div class="card-value purple" id="mem-swap">—</div>
+        <div class="card-sub" id="mem-swap-sub">—</div>
+        <div class="card-bar"><div class="card-bar-fill" id="swap-bar" style="background:var(--purple)"></div></div>
+      </div>
+    </div>
+    <div class="grid-65-35">
+      <div class="chart-panel">
+        <div class="section-head">
+          <div class="section-title"><span class="dot cyan"></span>MEMORY USAGE — 60s WINDOW</div>
+        </div>
+        <div class="chart-wrap" style="height:220px"><canvas id="chart-mem"></canvas></div>
+      </div>
+      <div class="chart-panel">
+        <div class="section-head">
+          <div class="section-title"><span class="dot cyan"></span>BREAKDOWN</div>
+        </div>
+        <div class="donut-wrap">
+          <canvas id="chart-mem-donut" width="180" height="180"></canvas>
+          <div class="donut-legend" id="donut-legend"></div>
+        </div>
+      </div>
+    </div>
+    <div class="alert-section" id="mem-danger">
+      <div class="alert-panel">
+        <div class="alert-header">
+          <span class="alert-blink" style="color:var(--red)">⚠</span>
+          <span class="alert-header-title">MEMORY DANGER ALERTS</span>
+          <span style="margin-left:auto;font-size:.72em;color:var(--dimmer)">auto-clears after 5h</span>
+        </div>
+        <div class="alert-list" id="mem-alert-list"></div>
+      </div>
+    </div>
+    <div class="proc-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot cyan"></span>TOP MEMORY CONSUMERS</div>
+        <span class="proc-count">top 10 by mem</span>
+      </div>
+      <div class="proc-table-wrap">
+        <table><thead><tr>
+          <th>PID</th><th>PROCESS</th><th>USER</th><th>MEM (MB)</th><th>CPU %</th><th>STATUS</th>
+        </tr></thead>
+        <tbody id="mem-proc-tbody"></tbody></table>
+      </div>
+    </div>
+    <div class="log-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot cyan"></span>MEMORY LOGS</div>
+      </div>
+      <div class="log-box" id="log-mem"></div>
+    </div>
+  </div><!-- /memory -->
+
+  <!-- ═══ DISK PAGE ═══ -->
+  <div class="page" id="page-disk">
+    <div class="cards cards-4">
+      <div class="card amber">
+        <div class="card-label">Disk Usage (/)</div>
+        <div class="card-value amber" id="disk-pct-card">—</div>
+        <div class="card-sub" id="disk-card-sub">—</div>
+        <div class="card-bar"><div class="card-bar-fill" id="disk-bar-root" style="background:var(--amber)"></div></div>
+      </div>
+      <div class="card green">
+        <div class="card-label">Read Speed</div>
+        <div class="card-value green" id="disk-read">—</div>
+        <div class="card-sub">current I/O read</div>
+      </div>
+      <div class="card green">
+        <div class="card-label">Write Speed</div>
+        <div class="card-value green" id="disk-write">—</div>
+        <div class="card-sub">current I/O write</div>
+      </div>
+      <div class="card cyan">
+        <div class="card-label">Inodes Used</div>
+        <div class="card-value cyan" id="disk-inodes">—</div>
+        <div class="card-sub">filesystem inodes</div>
+      </div>
+    </div>
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title"><span class="dot amber"></span>DISK I/O SPEED — 60s WINDOW</div>
+        <div style="font-size:.73em;color:var(--dimmer)">
+          <span style="color:var(--green)">▬</span> Read &nbsp;
+          <span style="color:var(--amber)">▬</span> Write
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:180px"><canvas id="chart-disk-io"></canvas></div>
+    </div>
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title"><span class="dot amber"></span>PARTITION USAGE</div>
+      </div>
+      <div id="partition-list"></div>
+    </div>
+    <div class="alert-section" id="disk-danger">
+      <div class="alert-panel">
+        <div class="alert-header">
+          <span class="alert-blink" style="color:var(--red)">⚠</span>
+          <span class="alert-header-title">DISK DANGER ALERTS</span>
+          <span style="margin-left:auto;font-size:.72em;color:var(--dimmer)">auto-clears after 5h</span>
+        </div>
+        <div class="alert-list" id="disk-alert-list"></div>
+      </div>
+    </div>
+    <div class="proc-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot amber"></span>TOP DISK I/O CONSUMERS</div>
+        <span class="proc-count">top 10 by disk i/o</span>
+      </div>
+      <div class="proc-table-wrap">
+        <table><thead><tr>
+          <th>PID</th><th>PROCESS</th><th>USER</th><th>DISK I/O (MB)</th><th>CPU %</th><th>MEM (MB)</th>
+        </tr></thead>
+        <tbody id="disk-proc-tbody"></tbody></table>
+      </div>
+    </div>
+    <div class="log-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot amber"></span>DISK LOGS</div>
+      </div>
+      <div class="log-box" id="log-disk"></div>
+    </div>
+  </div><!-- /disk -->
+
+</div><!-- /app -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// CONFIG — edit these to match your config.cfg thresholds
+// ══════════════════════════════════════════════════════════════════
+const CFG = {
+  API_URL:          'http://127.0.0.1:5050',
+  CPU_THRESHOLD:    80,
+  MEM_THRESHOLD:    75,
+  DISK_THRESHOLD:   90,
+  DANGER_CPU_PROC:  70,    // process cpu% danger threshold
+  DANGER_MEM_MB:    500,   // process mem MB danger threshold
+  DANGER_DISK_MB:   1000,  // process disk cumulative MB danger
+  HISTORY:          60,
+  ALERT_TTL:        5 * 60 * 60 * 1000,
+  POLL_METRICS:     2000,  // ms
+  POLL_PROCS:       3000,
+  POLL_LOGS:        5000,
+};
+
+// ── State ──────────────────────────────────────────────────────
+let apiKey = '';
+let H = CFG.HISTORY;
+let cpuHist=Array(H).fill(0), memHist=Array(H).fill(0);
+let ioRHist=Array(H).fill(0), ioWHist=Array(H).fill(0);
+
+let latestMetrics = null;
+let latestProcs   = [];
+let latestLogs    = [];
+
+let allAlerts=[], cpuAlerts=[], memAlerts=[], diskAlerts=[];
+
+let sortKey='cpu', sortDir='desc';
+let currentPage='dashboard';
+
+// ── Auth ───────────────────────────────────────────────────────
+async function submitKey(){
+  const k = document.getElementById('key-input').value.trim();
+  if(!k){ showKsErr('Please enter your API key'); return; }
+
+  showKsErr('Testing connection…');
+  try {
+    const r = await fetch(`${CFG.API_URL}/api/metrics`, {
+      headers: {'X-API-Key': k},
+      signal: AbortSignal.timeout(5000),
+    });
+    if(r.status===401){ showKsErr('Wrong API key — check api.key file'); return; }
+    if(!r.ok){ showKsErr(`API error: HTTP ${r.status}`); return; }
+
+    apiKey = k;
+    sessionStorage.setItem('sw_key', k);
+    bootDashboard();
+  } catch(e) {
+    showKsErr('Cannot reach API at 127.0.0.1:5050 — is the service running?');
+  }
+}
+
+function showKsErr(msg){ document.getElementById('ks-err').textContent=msg; }
+
+document.getElementById('key-input').addEventListener('keydown', e=>{
+  if(e.key==='Enter') submitKey();
+});
+
+// Auto-reconnect if key is in sessionStorage
+window.addEventListener('load', ()=>{
+  const k = sessionStorage.getItem('sw_key');
+  if(k){
+    document.getElementById('key-input').value=k;
+    apiKey=k;
+    bootDashboard();
+  }
+});
+
+function bootDashboard(){
+  document.getElementById('keyscreen').style.display='none';
+  document.getElementById('topbar').style.display='flex';
+  document.getElementById('app').style.display='flex';
+  initCharts();
+  startPolling();
+}
+
+// ── API calls ──────────────────────────────────────────────────
+async function apiFetch(path){
+  const r = await fetch(`${CFG.API_URL}${path}`,{
+    headers: {'X-API-Key': apiKey},
+    signal: AbortSignal.timeout(5000),
+  });
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function setApiStatus(ok, label){
+  const dot=document.getElementById('api-dot');
+  const lbl=document.getElementById('api-label');
+  dot.className='api-dot '+(ok?'live':'error');
+  lbl.textContent=label;
+  lbl.style.color=ok?'var(--green)':'var(--red)';
+  const eb=document.getElementById('error-banner');
+  if(!ok){
+    eb.className='show';
+    document.getElementById('error-msg').textContent=label;
+  } else {
+    eb.className='';
+  }
+}
+
+// ── Polling ────────────────────────────────────────────────────
+function startPolling(){
+  pollMetrics();
+  pollProcs();
+  pollLogs();
+  setInterval(pollMetrics, CFG.POLL_METRICS);
+  setInterval(pollProcs,   CFG.POLL_PROCS);
+  setInterval(pollLogs,    CFG.POLL_LOGS);
+}
+
+async function pollMetrics(){
+  try {
+    const d = await apiFetch('/api/metrics');
+    latestMetrics = d;
+    // Push to histories
+    cpuHist.shift(); cpuHist.push(d.cpu.percent);
+    memHist.shift(); memHist.push(d.memory.percent);
+    ioRHist.shift(); ioRHist.push(d.disk.io_read_mbs);
+    ioWHist.shift(); ioWHist.push(d.disk.io_write_mbs);
+    // Update host info bar
+    document.getElementById('host-info').textContent =
+      `${d.system.hostname} · ${d.system.kernel}`;
+    setApiStatus(true,'LIVE — 127.0.0.1:5050');
+    renderMetrics(d);
+  } catch(e) {
+    setApiStatus(false,`API error: ${e.message}`);
+  }
+}
+
+async function pollProcs(){
+  try {
+    const d = await apiFetch('/api/processes');
+    latestProcs = d.processes;
+    checkAlerts(latestProcs);
+    renderAllProcTables();
+  } catch{}
+}
+
+async function pollLogs(){
+  try {
+    const d = await apiFetch('/api/logs');
+    latestLogs = d.logs;
+    renderAllLogs();
+  } catch{}
+}
+
+// ── Charts ─────────────────────────────────────────────────────
+const CHART_BASE = {
+  animation:{duration:0},
+  responsive:true, maintainAspectRatio:false,
+  plugins:{legend:{display:false},tooltip:{
+    backgroundColor:'#0c1220',borderColor:'#1a2744',borderWidth:1,
+    titleColor:'#c8d6e5',bodyColor:'#4a6080',
+  }},
+  scales:{
+    x:{display:false,grid:{display:false}},
+    y:{min:0,max:100,
+       grid:{color:'rgba(26,39,68,.5)',drawBorder:false},
+       ticks:{color:'#4a6080',font:{family:"'Share Tech Mono',monospace",size:10},
+         callback:v=>v+'%'}
+    }
+  }
+};
+
+let charts={};
+function initCharts(){
+  const lbl=Array(H).fill('');
+  const mkLine=(id,datasets,opts)=>{
+    const ctx=document.getElementById(id).getContext('2d');
+    return new Chart(ctx,{type:'line',data:{labels:[...lbl],datasets},
+      options:JSON.parse(JSON.stringify(opts||CHART_BASE))});
+  };
+
+  charts.main = mkLine('chart-main',[
+    {label:'CPU',   data:[...cpuHist],borderColor:'#00ff88',backgroundColor:'rgba(0,255,136,.07)',borderWidth:1.5,pointRadius:0,tension:.4,fill:true},
+    {label:'Memory',data:[...memHist],borderColor:'#00e5ff',backgroundColor:'rgba(0,229,255,.07)',borderWidth:1.5,pointRadius:0,tension:.4,fill:true},
+  ]);
+
+  charts.cpu = mkLine('chart-cpu',[
+    {label:'CPU',data:[...cpuHist],borderColor:'#00ff88',backgroundColor:'rgba(0,255,136,.1)',borderWidth:2,pointRadius:0,tension:.4,fill:true},
+  ]);
+
+  charts.mem = mkLine('chart-mem',[
+    {label:'Memory',data:[...memHist],borderColor:'#00e5ff',backgroundColor:'rgba(0,229,255,.1)',borderWidth:2,pointRadius:0,tension:.4,fill:true},
+  ]);
+
+  // Disk I/O chart — MB/s scale
+  const ioOpts=JSON.parse(JSON.stringify(CHART_BASE));
+  ioOpts.scales.y.max=undefined;
+  ioOpts.scales.y.min=0;
+  ioOpts.scales.y.ticks.callback=v=>v+' MB/s';
+  ioOpts.plugins.tooltip.callbacks={label:c=>`${c.dataset.label}: ${c.parsed.y.toFixed(2)} MB/s`};
+  charts.diskio = mkLine('chart-disk-io',[
+    {label:'Read', data:[...ioRHist],borderColor:'#00ff88',backgroundColor:'rgba(0,255,136,.08)',borderWidth:1.5,pointRadius:0,tension:.4,fill:true},
+    {label:'Write',data:[...ioWHist],borderColor:'#ffb300',backgroundColor:'rgba(255,179,0,.08)',borderWidth:1.5,pointRadius:0,tension:.4,fill:true},
+  ], ioOpts);
+
+  // Memory donut
+  const donutCtx=document.getElementById('chart-mem-donut').getContext('2d');
+  charts.donut=new Chart(donutCtx,{type:'doughnut',data:{
+    labels:['Used','Cached','Free','Swap'],
+    datasets:[{data:[0,0,0,0],
+      backgroundColor:['#00e5ff','#7c4dff','#1a2744','#ff1744'],
+      borderColor:'#060a12',borderWidth:3}]
+  },options:{responsive:false,maintainAspectRatio:false,animation:{duration:500},
+    plugins:{legend:{display:false}},cutout:'70%'}});
+}
+
+// ── Metric Rendering ───────────────────────────────────────────
+function pctColor(v){ return v>=80?'var(--red)':v>=60?'var(--amber)':'var(--green)' }
+function pctCls(v){   return v>=80?'red':v>=60?'amber':'green' }
+function fmt(v,d=1){  return (v??0).toFixed(d) }
+
+function setCard(cardId,valId,barId,pct,suffix,sub){
+  const cls=pctCls(pct);
+  const card=document.getElementById(cardId);
+  card.className='card '+cls;
+  const vel=document.getElementById(valId);
+  vel.className='card-value '+cls;
+  vel.textContent=pct+suffix;
+  if(sub){const s=card.querySelector('.card-sub');if(s)s.textContent=sub;}
+  const b=document.getElementById(barId);
+  if(b){b.style.width=Math.min(pct,100)+'%';b.style.background=pctColor(pct);}
+}
+
+function renderMetrics(d){
+  const cpu=d.cpu, mem=d.memory, disk=d.disk, sys=d.system;
+
+  // ── Dashboard cards
+  setCard('card-cpu','cv-cpu','cb-cpu',Math.round(cpu.percent),'%',
+    `threshold: ${CFG.CPU_THRESHOLD}%`);
+  setCard('card-mem','cv-mem','cb-mem',Math.round(mem.percent),'%',
+    `${mem.used_mb} MB / ${mem.total_mb} MB`);
+  setCard('card-disk','cv-disk','cb-disk',Math.round(disk.root_pct),'%',
+    `${disk.root_used_gb} GB / ${disk.root_total_gb} GB`);
+
+  // Uptime strip
+  document.getElementById('uptime-val').textContent   = sys.uptime_str;
+  document.getElementById('load-strip').textContent   = `${cpu.load1} / ${cpu.load5} / ${cpu.load15}`;
+  document.getElementById('proc-total').textContent   = sys.proc_count;
+  document.getElementById('hostname-val').textContent = sys.hostname;
+  document.getElementById('kernel-val').textContent   = sys.kernel;
+
+  // Charts
+  charts.main.data.datasets[0].data=[...cpuHist];
+  charts.main.data.datasets[1].data=[...memHist];
+  charts.main.update('none');
+
+  // ── CPU page
+  const cpuCard=document.getElementById('cpu-pct-card');
+  const cpuCls=pctCls(cpu.percent);
+  cpuCard.className='card-value '+cpuCls;
+  cpuCard.textContent=fmt(cpu.percent)+'%';
+  document.getElementById('cpb-current').style.width=cpu.percent+'%';
+  document.getElementById('cpb-current').style.background=pctColor(cpu.percent);
+  document.getElementById('cpu-load1').textContent=fmt(cpu.load1,2);
+  document.getElementById('cpu-load5').textContent=fmt(cpu.load5,2);
+  document.getElementById('cpu-load15').textContent=fmt(cpu.load15,2);
+  document.getElementById('cpu-freq-label').textContent=
+    cpu.freq_mhz?`${cpu.phys_count} physical / ${cpu.core_count} logical @ ${cpu.freq_mhz} MHz`:'';
+  document.getElementById('cpu-core-label').textContent=
+    `${cpu.core_count} logical cores`;
+  // Cores
+  document.getElementById('core-grid').innerHTML=(cpu.per_core||[]).map((v,i)=>{
+    const c=pctColor(v);
+    return `<div class="core-item">
+      <div class="core-label">Core ${i}</div>
+      <div class="core-val" style="color:${c}">${fmt(v,0)}%</div>
+      <div class="core-bar"><div class="core-bar-fill" style="width:${Math.min(v,100)}%;background:${c}"></div></div>
+    </div>`;
+  }).join('');
+  charts.cpu.data.datasets[0].data=[...cpuHist];
+  charts.cpu.update('none');
+
+  // ── Memory page
+  document.getElementById('mem-pct-card').textContent=fmt(mem.percent)+'%';
+  document.getElementById('mem-card-sub').textContent=`${mem.used_mb} MB / ${mem.total_mb} MB`;
+  document.getElementById('mb-bar').style.width=mem.percent+'%';
+  document.getElementById('mem-avail').textContent=mem.available_mb+' MB';
+  document.getElementById('mem-cached').textContent=(mem.cached_mb+mem.buffers_mb)+' MB';
+  document.getElementById('mem-swap').textContent=mem.swap_used_mb+' MB';
+  document.getElementById('mem-swap-sub').textContent=`/ ${mem.swap_total_mb} MB`;
+  const swPct=mem.swap_total_mb>0?Math.round(mem.swap_percent):0;
+  document.getElementById('swap-bar').style.width=swPct+'%';
+  // Donut
+  const freeMB=Math.max(0,mem.available_mb-mem.cached_mb);
+  const donutData=[mem.used_mb, mem.cached_mb, freeMB, mem.swap_used_mb];
+  charts.donut.data.datasets[0].data=donutData;
+  charts.donut.update('none');
+  const dlabels=['Used','Cached','Free','Swap'];
+  const dcolors=['#00e5ff','#7c4dff','#1a2744','#ff1744'];
+  document.getElementById('donut-legend').innerHTML=dlabels.map((l,i)=>`
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${dcolors[i]}"></div>
+      <span class="legend-label">${l}</span>
+      <span class="legend-val">${donutData[i]} MB</span>
+    </div>`).join('');
+  charts.mem.data.datasets[0].data=[...memHist];
+  charts.mem.update('none');
+
+  // ── Disk page
+  document.getElementById('disk-pct-card').textContent=fmt(disk.root_pct)+'%';
+  document.getElementById('disk-card-sub').textContent=`${disk.root_used_gb} GB / ${disk.root_total_gb} GB`;
+  document.getElementById('disk-bar-root').style.width=disk.root_pct+'%';
+  document.getElementById('disk-bar-root').style.background=pctColor(disk.root_pct);
+  document.getElementById('disk-read').textContent=fmt(disk.io_read_mbs,2)+' MB/s';
+  document.getElementById('disk-write').textContent=fmt(disk.io_write_mbs,2)+' MB/s';
+  document.getElementById('disk-inodes').textContent=fmt(disk.inode_pct,1)+'%';
+  // Partitions
+  document.getElementById('partition-list').innerHTML=(disk.partitions||[]).map(p=>{
+    const col=pctColor(p.pct);
+    return `<div class="disk-part">
+      <div class="disk-part-head">
+        <span class="disk-part-name">${p.mountpoint} <span style="color:var(--dimmer);font-size:.85em">${p.device||''}</span></span>
+        <span style="color:${col}">${p.pct}% &nbsp;${p.used_gb} GB / ${p.total_gb} GB</span>
+      </div>
+      <div class="disk-bar"><div class="disk-bar-fill" style="width:${Math.min(p.pct,100)}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+  charts.diskio.data.datasets[0].data=[...ioRHist];
+  charts.diskio.data.datasets[1].data=[...ioWHist];
+  charts.diskio.update('none');
+}
+
+// ── Process tables ─────────────────────────────────────────────
+function getSorted(arr,key,dir){
+  return [...arr].sort((a,b)=>{
+    let va=a[key],vb=b[key];
+    if(typeof va==='string') return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
+    return dir==='asc'?va-vb:vb-va;
+  });
+}
+
+function setSort(k){
+  if(sortKey===k) sortDir=sortDir==='desc'?'asc':'desc';
+  else{sortKey=k;sortDir='desc';}
+  ['pid','name','cpu','mem_mb','disk_mb','status'].forEach(key=>{
+    const el=document.getElementById('sh-'+key);
+    if(!el) return;
+    el.textContent=sortKey===key?(sortDir==='desc'?'↓':'↑'):'';
+    el.parentElement.className=sortKey===key?('sort-'+sortDir):'';
+  });
+  renderProcTable('main');
+}
+
+function isDanger(p){
+  return p.cpu>CFG.DANGER_CPU_PROC || p.mem_mb>CFG.DANGER_MEM_MB || p.disk_mb>CFG.DANGER_DISK_MB;
+}
+
+function badgeCls(status){
+  return status==='running'?'badge-run':status==='sleeping'?'badge-sleep':'badge-stop';
+}
+
+function renderProcTable(page){
+  const filter=(document.getElementById('proc-filter')||{}).value||'';
+  const fl=filter.toLowerCase();
+  let sorted=getSorted(latestProcs,sortKey,sortDir);
+  if(fl) sorted=sorted.filter(p=>p.name.toLowerCase().includes(fl)||String(p.pid).includes(fl));
+  document.getElementById('proc-tbody').innerHTML=sorted.map(p=>{
+    const d=isDanger(p);
+    return `<tr class="${d?'danger-row':''}">
+      <td class="pid">${p.pid}</td>
+      <td class="pname">${p.name}</td>
+      <td style="color:${pctColor(p.cpu)};font-family:var(--display);font-size:.76em">${fmt(p.cpu)}%</td>
+      <td style="color:${p.mem_mb>CFG.DANGER_MEM_MB?'var(--red)':p.mem_mb>200?'var(--amber)':'var(--green)'};font-family:var(--display);font-size:.76em">${fmt(p.mem_mb,0)}</td>
+      <td style="color:${p.disk_mb>CFG.DANGER_DISK_MB?'var(--red)':'var(--dim)'};font-family:var(--display);font-size:.76em">${fmt(p.disk_mb,1)}</td>
+      <td><span class="badge ${badgeCls(p.status)}">${p.status}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('proc-count').textContent=`${sorted.length} processes`;
+}
+
+function renderAllProcTables(){
+  renderProcTable('main');
+  // CPU page top 10
+  const topCPU=getSorted(latestProcs,'cpu','desc').slice(0,10);
+  document.getElementById('cpu-proc-tbody').innerHTML=topCPU.map(p=>`
+    <tr class="${isDanger(p)?'danger-row':''}">
+      <td class="pid">${p.pid}</td><td class="pname">${p.name}</td>
+      <td class="pid">${p.user||'?'}</td>
+      <td style="color:${pctColor(p.cpu)};font-family:var(--display);font-size:.76em">${fmt(p.cpu)}%</td>
+      <td style="font-family:var(--display);font-size:.76em;color:var(--text)">${fmt(p.mem_mb,0)}</td>
+      <td><span class="badge ${badgeCls(p.status)}">${p.status}</span></td>
+    </tr>`).join('');
+  // Mem page top 10
+  const topMem=getSorted(latestProcs,'mem_mb','desc').slice(0,10);
+  document.getElementById('mem-proc-tbody').innerHTML=topMem.map(p=>`
+    <tr class="${isDanger(p)?'danger-row':''}">
+      <td class="pid">${p.pid}</td><td class="pname">${p.name}</td>
+      <td class="pid">${p.user||'?'}</td>
+      <td style="color:${p.mem_mb>CFG.DANGER_MEM_MB?'var(--red)':'var(--cyan)'};font-family:var(--display);font-size:.76em">${fmt(p.mem_mb,0)}</td>
+      <td style="font-family:var(--display);font-size:.76em;color:var(--text)">${fmt(p.cpu)}%</td>
+      <td><span class="badge ${badgeCls(p.status)}">${p.status}</span></td>
+    </tr>`).join('');
+  // Disk page top 10
+  const topDisk=getSorted(latestProcs,'disk_mb','desc').slice(0,10);
+  document.getElementById('disk-proc-tbody').innerHTML=topDisk.map(p=>`
+    <tr class="${isDanger(p)?'danger-row':''}">
+      <td class="pid">${p.pid}</td><td class="pname">${p.name}</td>
+      <td class="pid">${p.user||'?'}</td>
+      <td style="color:${p.disk_mb>CFG.DANGER_DISK_MB?'var(--red)':'var(--amber)'};font-family:var(--display);font-size:.76em">${fmt(p.disk_mb,1)}</td>
+      <td style="font-family:var(--display);font-size:.76em;color:var(--text)">${fmt(p.cpu)}%</td>
+      <td style="font-family:var(--display);font-size:.76em;color:var(--text)">${fmt(p.mem_mb,0)}</td>
+    </tr>`).join('');
+}
+
+// ── Alerts ─────────────────────────────────────────────────────
+function checkAlerts(procs){
+  const now=Date.now();
+  // Expire old alerts
+  [allAlerts,cpuAlerts,memAlerts,diskAlerts].forEach(arr=>{
+    let i=arr.length; while(i--) if(now-arr[i].ts>CFG.ALERT_TTL) arr.splice(i,1);
+  });
+  procs.forEach(p=>{
+    const addIfNew=(pool,key,type,msg)=>{
+      if(!pool.find(a=>a.key===key)){
+        pool.push({key,ts:now,pid:p.pid,name:p.name,type,msg});
+      }
+    };
+    if(p.cpu>CFG.DANGER_CPU_PROC){
+      const k=`cpu-${p.pid}`;
+      addIfNew(allAlerts,k,'CPU',`CPU spike ${fmt(p.cpu)}% > ${CFG.DANGER_CPU_PROC}%`);
+      addIfNew(cpuAlerts,k,'CPU',`CPU spike ${fmt(p.cpu)}% > ${CFG.DANGER_CPU_PROC}%`);
+    }
+    if(p.mem_mb>CFG.DANGER_MEM_MB){
+      const k=`mem-${p.pid}`;
+      addIfNew(allAlerts,k,'MEM',`Memory ${fmt(p.mem_mb,0)} MB > ${CFG.DANGER_MEM_MB} MB`);
+      addIfNew(memAlerts,k,'MEM',`Memory ${fmt(p.mem_mb,0)} MB > ${CFG.DANGER_MEM_MB} MB`);
+    }
+    if(p.disk_mb>CFG.DANGER_DISK_MB){
+      const k=`disk-${p.pid}`;
+      addIfNew(allAlerts,k,'DISK',`Disk I/O ${fmt(p.disk_mb,0)} MB > ${CFG.DANGER_DISK_MB} MB`);
+      addIfNew(diskAlerts,k,'DISK',`Disk I/O ${fmt(p.disk_mb,0)} MB > ${CFG.DANGER_DISK_MB} MB`);
+    }
+  });
+  renderAlerts();
+}
+
+function alertAge(ts){
+  const m=Math.floor((Date.now()-ts)/60000);
+  return m<1?'just now':m<60?`${m}m ago`:`${Math.floor(m/60)}h ${m%60}m ago`;
+}
+
+function alertHTML(a){
+  return `<div class="alert-item">
+    <div class="alert-icon">⚠</div>
+    <div class="alert-body">
+      <div class="alert-proc">${a.name} <span style="color:var(--dimmer);font-weight:normal">(PID ${a.pid})</span>
+        <span style="margin-left:8px;font-size:.8em;background:rgba(255,23,68,.15);padding:2px 6px;border-radius:2px;color:var(--red)">${a.type}</span>
+      </div>
+      <div class="alert-detail">${a.msg}</div>
+    </div>
+    <div class="alert-time">${alertAge(a.ts)}</div>
+  </div>`;
+}
+
+function setAlertSection(secId,listId,arr){
+  const s=document.getElementById(secId);
+  const l=document.getElementById(listId);
+  if(arr.length){s.className='alert-section has-alerts';l.innerHTML=arr.map(alertHTML).join('');}
+  else{s.className='alert-section';}
+}
+
+function renderAlerts(){
+  setAlertSection('dash-danger','dash-alert-list',allAlerts);
+  setAlertSection('cpu-danger', 'cpu-alert-list', cpuAlerts);
+  setAlertSection('mem-danger', 'mem-alert-list', memAlerts);
+  setAlertSection('disk-danger','disk-alert-list',diskAlerts);
+}
+
+// ── Log Rendering ──────────────────────────────────────────────
+function parseLogLine(line){
+  // Format: 2025-08-15 10:23:01 [CPU] Status: PASS | Usage: 12% | ...
+  const m=line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+\[(\w+)\]\s+(Status:\s*(\w+))?(.*)$/);
+  if(m){
+    const level=m[4]||'INFO';
+    return {ts:m[1],tag:m[2],level,msg:(m[5]||m[3]||line).trim()};
+  }
+  return {ts:'',tag:'LOG',level:'INFO',msg:line};
+}
+
+function logEntryHTML(e){
+  const clsMap={PASS:'tag-pass',ALERT:'tag-alert',WARN:'tag-warn'};
+  const cls=clsMap[e.level]||'tag-info';
+  return `<div class="log-entry">
+    <span class="log-ts">${e.ts}</span>
+    <span class="log-tag ${cls}">${e.level}</span>
+    <span style="color:var(--dimmer);flex-shrink:0;font-size:.78em">[${e.tag}]</span>
+    <span class="log-msg">${e.msg}</span>
+  </div>`;
+}
+
+function renderAllLogs(){
+  const parsed=latestLogs.map(parseLogLine);
+  const last20=parsed.slice(-20).reverse();
+  const cpuLines=parsed.filter(e=>e.tag==='CPU').slice(-20).reverse();
+  const memLines=parsed.filter(e=>e.tag==='MEMORY'||e.tag==='MEM').slice(-20).reverse();
+  const dskLines=parsed.filter(e=>e.tag==='DISK').slice(-20).reverse();
+
+  const render=(id,arr)=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.innerHTML=(arr.length?arr.map(logEntryHTML).join('')
+      :`<div style="color:var(--dimmer);padding:8px 0;font-size:.8em">No entries yet. Run ./monitor.sh to generate logs.</div>`);
+  };
+  render('log-main',last20);
+  render('log-cpu',  cpuLines.length?cpuLines:last20);
+  render('log-mem',  memLines.length?memLines:last20);
+  render('log-disk', dskLines.length?dskLines:last20);
+}
+
+// ── Navigation ─────────────────────────────────────────────────
+function navigate(page){
+  currentPage=page;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>{
+    b.classList.toggle('active',b.textContent.toLowerCase().includes(page));
+  });
+}
+
+// ── Clock ──────────────────────────────────────────────────────
+setInterval(()=>{
+  document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB');
+},1000);
+document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB');
+</script>
+</body>
+</html>

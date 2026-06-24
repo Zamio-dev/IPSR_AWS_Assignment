@@ -1,0 +1,219 @@
+---
+# =============================================================
+# ROLE: 06_wordpress — Download, install, and configure WordPress
+# =============================================================
+
+# ── Download WordPress ────────────────────────────────────────
+
+- name: "WORDPRESS | Download latest WordPress"
+  ansible.builtin.get_url:
+    url: https://wordpress.org/latest.tar.gz
+    dest: /tmp/wordpress-latest.tar.gz
+    mode: '0644'
+    timeout: 60
+
+- name: "WORDPRESS | Extract WordPress archive"
+  ansible.builtin.unarchive:
+    src: /tmp/wordpress-latest.tar.gz
+    dest: /tmp/
+    remote_src: true
+    creates: /tmp/wordpress/wp-settings.php
+
+# ── Deploy WordPress Files ────────────────────────────────────
+
+- name: "WORDPRESS | Copy WordPress files to site root: {{ site_root }}"
+  ansible.posix.synchronize:
+    src: /tmp/wordpress/
+    dest: "{{ site_root }}/"
+    delete: false
+    recursive: true
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: "WORDPRESS | Set correct ownership on all WordPress files"
+  ansible.builtin.file:
+    path: "{{ site_root }}"
+    owner: "{{ wp_username }}"
+    group: "{{ wp_username }}"
+    recurse: true
+
+- name: "WORDPRESS | Set directory permissions (755)"
+  ansible.builtin.shell:
+    cmd: "find {{ site_root }} -type d -exec chmod 755 {} \\;"
+  changed_when: true
+
+- name: "WORDPRESS | Set file permissions (644)"
+  ansible.builtin.shell:
+    cmd: "find {{ site_root }} -type f -exec chmod 644 {} \\;"
+  changed_when: true
+
+- name: "WORDPRESS | Set wp-content writable by web server"
+  ansible.builtin.file:
+    path: "{{ site_root }}/wp-content"
+    owner: "{{ wp_username }}"
+    group: "{{ wp_username }}"
+    mode: '0755'
+    recurse: true
+
+# ── Generate WordPress Secret Keys ───────────────────────────
+
+- name: "WORDPRESS | Fetch security keys from WordPress API"
+  ansible.builtin.uri:
+    url: https://api.wordpress.org/secret-key/1.1/salt/
+    return_content: true
+  register: wp_salt_response
+
+# ── Deploy wp-config.php from Template ───────────────────────
+
+- name: "WORDPRESS | Deploy wp-config.php from template"
+  ansible.builtin.template:
+    src: wp-config.php.j2
+    dest: "{{ site_root }}/wp-config.php"
+    owner: "{{ wp_username }}"
+    group: "{{ wp_username }}"
+    mode: '0640'
+
+# ── Set SELinux Context for wp-content ───────────────────────
+
+- name: "WORDPRESS | Set SELinux context — allow Nginx to write wp-content"
+  ansible.builtin.command:
+    cmd: "chcon -R -t httpd_sys_rw_content_t {{ site_root }}/wp-content/"
+  changed_when: true
+
+- name: "WORDPRESS | Set SELinux context — allow Nginx to write uploads"
+  ansible.builtin.file:
+    path: "{{ site_root }}/wp-content/uploads"
+    state: directory
+    owner: "{{ wp_username }}"
+    group: "{{ wp_username }}"
+    mode: '0755'
+
+- name: "WORDPRESS | Set SELinux context on uploads directory"
+  ansible.builtin.command:
+    cmd: "chcon -R -t httpd_sys_rw_content_t {{ site_root }}/wp-content/uploads/"
+  changed_when: true
+
+# ── Run WordPress CLI Installation ───────────────────────────
+
+- name: "WORDPRESS | Download WP-CLI"
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    dest: /usr/local/bin/wp
+    mode: '0755'
+
+- name: "WORDPRESS | Run WordPress installation via WP-CLI"
+  ansible.builtin.command:
+    cmd: >
+      wp core install
+      --path={{ site_root }}
+      --url=https://{{ domain }}
+      --title="{{ wp_site_title }}"
+      --admin_user="{{ wp_admin_user }}"
+      --admin_password="{{ wp_admin_password }}"
+      --admin_email="{{ wp_admin_email }}"
+      --skip-email
+      --allow-root
+  register: wp_install_result
+  changed_when: "'WordPress installed successfully.' in wp_install_result.stdout"
+  failed_when:
+    - wp_install_result.rc != 0
+    - "'already installed' not in wp_install_result.stdout"
+
+- name: "WORDPRESS | Print WP-CLI result"
+  ansible.builtin.debug:
+    msg: "{{ wp_install_result.stdout }}"
+
+# ── Post-Install WordPress Configuration via WP-CLI ──────────
+
+- name: "WORDPRESS | Set permalink structure to /%postname%/"
+  ansible.builtin.command:
+    cmd: "wp option update permalink_structure '/%postname%/' --path={{ site_root }} --allow-root"
+  changed_when: true
+
+- name: "WORDPRESS | Set timezone"
+  ansible.builtin.command:
+    cmd: "wp option update timezone_string 'Asia/Kolkata' --path={{ site_root }} --allow-root"
+  changed_when: true
+
+- name: "WORDPRESS | Set date format"
+  ansible.builtin.command:
+    cmd: "wp option update date_format 'F j, Y' --path={{ site_root }} --allow-root"
+  changed_when: true
+
+- name: "WORDPRESS | Delete default 'Hello World' post"
+  ansible.builtin.command:
+    cmd: "wp post delete 1 --force --path={{ site_root }} --allow-root"
+  ignore_errors: true
+  changed_when: true
+
+- name: "WORDPRESS | Delete default 'Sample Page'"
+  ansible.builtin.command:
+    cmd: "wp post delete 2 --force --path={{ site_root }} --allow-root"
+  ignore_errors: true
+  changed_when: true
+
+- name: "WORDPRESS | Create About Me page"
+  ansible.builtin.command:
+    cmd: >
+      wp post create
+      --post_type=page
+      --post_title='About Me'
+      --post_status=publish
+      --post_content='Welcome to my About page. I am a technology enthusiast and aspiring web developer.'
+      --path={{ site_root }}
+      --allow-root
+  changed_when: true
+
+- name: "WORDPRESS | Create Contact page"
+  ansible.builtin.command:
+    cmd: >
+      wp post create
+      --post_type=page
+      --post_title='Contact'
+      --post_status=publish
+      --post_content='Feel free to reach out to me via email.'
+      --path={{ site_root }}
+      --allow-root
+  changed_when: true
+
+- name: "WORDPRESS | Create personal blog post"
+  ansible.builtin.command:
+    cmd: >
+      wp post create
+      --post_type=post
+      --post_title='About Me: My Journey into Technology and Web Development'
+      --post_status=publish
+      --post_category='Personal'
+      --post_content='Hello and welcome to my personal blog! I am a technology enthusiast and aspiring web developer. I set up this entire website on AWS running Red Hat Enterprise Linux, fully automated with Ansible. This blog will document my learning journey, tutorials, and personal reflections. Stay tuned for more posts!'
+      --path={{ site_root }}
+      --allow-root
+  changed_when: true
+
+- name: "WORDPRESS | Install and activate Yoast SEO plugin"
+  ansible.builtin.command:
+    cmd: "wp plugin install wordpress-seo --activate --path={{ site_root }} --allow-root"
+  ignore_errors: true
+  changed_when: true
+
+- name: "WORDPRESS | Install and activate WP Super Cache plugin"
+  ansible.builtin.command:
+    cmd: "wp plugin install wp-super-cache --activate --path={{ site_root }} --allow-root"
+  ignore_errors: true
+  changed_when: true
+
+- name: "WORDPRESS | Install Wordfence Security plugin"
+  ansible.builtin.command:
+    cmd: "wp plugin install wordfence --activate --path={{ site_root }} --allow-root"
+  ignore_errors: true
+  changed_when: true
+
+- name: "WORDPRESS | Flush rewrite rules"
+  ansible.builtin.command:
+    cmd: "wp rewrite flush --path={{ site_root }} --allow-root"
+  changed_when: true
+
+- name: "WORDPRESS | Print WordPress credentials"
+  ansible.builtin.debug:
+    msg:
+      - "WordPress Admin URL : https://{{ domain }}/wp-admin"
+      - "WordPress Username  : {{ wp_admin_user }}"
+      - "WordPress Password  : {{ wp_admin_password }}"

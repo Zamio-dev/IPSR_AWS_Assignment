@@ -1,0 +1,98 @@
+---
+# =============================================================
+# MASTER PLAYBOOK — WordPress on RHEL 10 | t2.micro | AWS
+# =============================================================
+# Usage:
+#   ansible-playbook -i inventory/hosts.ini site.yml
+#   ansible-playbook -i inventory/hosts.ini site.yml --tags "mariadb,php"
+#   ansible-playbook -i inventory/hosts.ini site.yml --start-at-task "Create WordPress DB"
+#
+# Tags available:
+#   common, mariadb, php, nginx, sftp, wordpress, phpmyadmin, ssl
+# =============================================================
+
+- name: "WordPress Full Stack Deployment on RHEL 10"
+  hosts: wordpress_servers
+  become: true
+  become_method: sudo
+  gather_facts: true
+
+  pre_tasks:
+    - name: "PREFLIGHT | Verify OS is Red Hat"
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "RedHat"
+        fail_msg: "This playbook requires Red Hat Enterprise Linux. Found: {{ ansible_os_family }}"
+        success_msg: "OS check passed: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+
+    - name: "PREFLIGHT | Print deployment summary"
+      ansible.builtin.debug:
+        msg:
+          - "======================================================"
+          - " WordPress Deployment Starting"
+          - "======================================================"
+          - " Host        : {{ inventory_hostname }}"
+          - " Domain      : {{ domain }}"
+          - " Linux user  : {{ wp_username }}"
+          - " Site root   : {{ site_root }}"
+          - " DB name     : {{ db_name }}"
+          - "======================================================"
+
+  roles:
+    - role: 01_common
+      tags: common
+
+    - role: 02_mariadb
+      tags: mariadb
+
+    - role: 03_php
+      tags: php
+
+    - role: 04_nginx
+      tags: nginx
+
+    - role: 05_user_sftp
+      tags: sftp
+
+    - role: 06_wordpress
+      tags: wordpress
+
+    - role: 07_phpmyadmin
+      tags: phpmyadmin
+
+    - role: 08_ssl
+      tags: ssl
+
+  post_tasks:
+    - name: "FINAL | Ensure all services are running"
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop:
+        - nginx
+        - php-fpm
+        - mariadb
+
+    - name: "FINAL | Print credentials summary"
+      ansible.builtin.debug:
+        msg:
+          - "============================================================"
+          - " DEPLOYMENT COMPLETE — CREDENTIALS SUMMARY"
+          - "============================================================"
+          - " SFTP:"
+          - "   Host     : {{ ansible_host }}"
+          - "   Port     : 22"
+          - "   Username : {{ wp_username }}"
+          - "   Password : (from .env → WP_USER_PASSWORD)"
+          - " phpMyAdmin:"
+          - "   URL      : http://{{ domain }}:{{ pma_port }}"
+          - "   Basic Auth User : {{ pma_htpasswd_user }}"
+          - "   Basic Auth Pass : (from .env → PMA_HTPASSWD_PASSWORD)"
+          - "   DB User  : {{ db_user }}"
+          - "   DB Pass  : (from .env → DB_PASSWORD)"
+          - " WordPress:"
+          - "   Admin URL: https://{{ domain }}/wp-admin"
+          - "   Username : {{ wp_admin_user }}"
+          - "   Password : (from .env → WP_ADMIN_PASSWORD)"
+          - "============================================================"

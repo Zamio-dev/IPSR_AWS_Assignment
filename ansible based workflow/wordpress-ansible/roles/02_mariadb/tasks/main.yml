@@ -1,0 +1,110 @@
+---
+# =============================================================
+# ROLE: 02_mariadb — Install and configure MariaDB 10.6
+# =============================================================
+
+- name: "MARIADB | Add MariaDB 10.6 repository"
+  ansible.builtin.copy:
+    dest: /etc/yum.repos.d/mariadb.repo
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [mariadb]
+      name = MariaDB 10.6
+      baseurl = https://downloads.mariadb.com/MariaDB/mariadb-10.6/yum/rhel/9/x86_64
+      gpgkey = https://downloads.mariadb.com/MariaDB/MariaDB-Server-GPG-KEY
+      gpgcheck = 1
+      enabled = 1
+
+- name: "MARIADB | Install MariaDB server and client"
+  ansible.builtin.dnf:
+    name:
+      - MariaDB-server
+      - MariaDB-client
+      - python3-PyMySQL      # Required by Ansible's mysql_ modules
+    state: present
+  notify: restart mariadb
+
+- name: "MARIADB | Start and enable MariaDB service"
+  ansible.builtin.service:
+    name: mariadb
+    state: started
+    enabled: true
+
+- name: "MARIADB | Set root password"
+  community.mysql.mysql_user:
+    name: root
+    host: localhost
+    password: "{{ db_root_password }}"
+    login_unix_socket: /var/lib/mysql/mysql.sock
+    state: present
+  ignore_errors: true
+
+- name: "MARIADB | Create .my.cnf for passwordless root login"
+  ansible.builtin.copy:
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: '0600'
+    content: |
+      [client]
+      user=root
+      password={{ db_root_password }}
+
+- name: "MARIADB | Remove anonymous users"
+  community.mysql.mysql_user:
+    name: ''
+    host_all: true
+    state: absent
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: "MARIADB | Remove remote root login"
+  community.mysql.mysql_user:
+    name: root
+    host: "{{ item }}"
+    state: absent
+    login_unix_socket: /var/lib/mysql/mysql.sock
+  loop:
+    - "{{ ansible_hostname }}"
+    - "127.0.0.1"
+    - "::1"
+  ignore_errors: true
+
+- name: "MARIADB | Remove test database"
+  community.mysql.mysql_db:
+    name: test
+    state: absent
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: "MARIADB | Create WordPress database"
+  community.mysql.mysql_db:
+    name: "{{ db_name }}"
+    encoding: utf8mb4
+    collation: utf8mb4_unicode_ci
+    state: present
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: "MARIADB | Create WordPress database user"
+  community.mysql.mysql_user:
+    name: "{{ db_user }}"
+    host: localhost
+    password: "{{ db_password }}"
+    priv: "{{ db_name }}.*:ALL"
+    state: present
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: "MARIADB | Flush privileges"
+  community.mysql.mysql_query:
+    query: FLUSH PRIVILEGES
+    login_unix_socket: /var/lib/mysql/mysql.sock
+
+- name: "MARIADB | Verify MariaDB version"
+  ansible.builtin.command:
+    cmd: mysql --version
+  register: mariadb_version
+  changed_when: false
+
+- name: "MARIADB | Print version"
+  ansible.builtin.debug:
+    msg: "MariaDB installed: {{ mariadb_version.stdout }}"

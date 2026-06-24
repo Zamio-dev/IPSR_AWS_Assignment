@@ -1,0 +1,51 @@
+---
+# =============================================================
+# GROUP VARS — Edit ALL values here before running the playbook
+# =============================================================
+#
+# ┌─────────────────────────────────────────────────────────────┐
+# │  PASSWORDS ARE NOW IN .env — edit that file, NOT this one  │
+# │  .env is gitignored and must never be committed.            │
+# │  Beginner tip: after extracting the zip, run                 │
+# │     cp .env.sample .env                                    │
+# │  and change every CHANGE_ME to your real password.         │
+# └─────────────────────────────────────────────────────────────┘
+#
+# The 5 lines below load their values from .env at playbook start.
+# Do NOT put real passwords in this file.
+
+wp_user_password:     "{{ lookup('env', 'WP_USER_PASSWORD') }}"
+db_root_password:     "{{ lookup('env', 'DB_ROOT_PASSWORD') }}"
+db_password:          "{{ lookup('env', 'DB_PASSWORD') }}"
+wp_admin_password:    "{{ lookup('env', 'WP_ADMIN_PASSWORD') }}"
+pma_htpasswd_password:"{{ lookup('env', 'PMA_HTPASSWD_PASSWORD') }}"
+
+# ── Website User ──────────────────────────────────────────────
+wp_username: "bloguser"           # Linux user created on the server
+wp_sitename: "myblog"             # Website/folder name
+
+# ── Domain ────────────────────────────────────────────────────
+domain: "yourdomain.com"          # Your registered domain (must resolve to EC2 IP)
+domain_www: "www.yourdomain.com"  # www subdomain
+
+# ── MariaDB 10.6 ──────────────────────────────────────────────
+db_name: "myblog_db"
+db_user: "myblog_user"
+
+# ── WordPress ─────────────────────────────────────────────────
+wp_admin_user: "wpadmin"
+wp_admin_email: "admin@yourdomain.com"
+wp_site_title: "My Personal Blog"
+
+# ── phpMyAdmin ────────────────────────────────────────────────
+pma_htpasswd_user: "pmaadmin"
+pma_port: 8080
+
+# ── SSL (Let's Encrypt) ───────────────────────────────────────
+ssl_email: "admin@yourdomain.com"
+
+# ── Derived paths (do not change unless you know what you're doing) ──
+site_root: "/home/{{ wp_username }}/{{ wp_sitename }}/public"
+site_logs: "/home/{{ wp_username }}/{{ wp_sitename }}/logs"
+site_tmp:  "/home/{{ wp_username }}/{{ wp_sitename }}/tmp"
+php_fpm_socket: "/var/run/php-fpm/{{ wp_username }}.sock"

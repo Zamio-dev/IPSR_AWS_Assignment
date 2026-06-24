@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SysWatch — Server Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060a12;--surface:#0c1220;--surface2:#111827;--surface3:#161f30;
+  --border:#1a2744;--border-b:#243560;
+  --text:#c8d6e5;--dim:#4a6080;--dimmer:#2a3f60;
+  --green:#00ff88;--green2:#00cc66;--green-glow:rgba(0,255,136,0.18);
+  --amber:#ffb300;--amber2:#ff8f00;--amber-glow:rgba(255,179,0,0.18);
+  --red:#ff1744;--red2:#c62828;--red-glow:rgba(255,23,68,0.18);
+  --cyan:#00e5ff;--cyan2:#0097a7;--cyan-glow:rgba(0,229,255,0.18);
+  --purple:#7c4dff;
+  --mono:'Share Tech Mono',monospace;
+  --display:'Orbitron',monospace;
+}
+html{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:13px;overflow-x:hidden}
+body{display:flex;flex-direction:column;min-height:100vh;background:
+  radial-gradient(ellipse 80% 40% at 50% -10%,rgba(0,229,255,0.05) 0%,transparent 70%),
+  radial-gradient(ellipse 60% 60% at 80% 100%,rgba(0,255,136,0.04) 0%,transparent 60%),
+  var(--bg);
+}
+/* ── TOPBAR ── */
+#topbar{display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px;height:52px;background:var(--surface);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 20px rgba(0,0,0,0.5);
+}
+#logo{font-family:var(--display);font-size:1.15em;font-weight:900;letter-spacing:.12em;
+  color:var(--green);text-shadow:0 0 20px var(--green);
+}
+#logo span{color:var(--cyan);text-shadow:0 0 20px var(--cyan)}
+nav{display:flex;gap:4px}
+.nav-btn{background:none;border:1px solid transparent;color:var(--dim);
+  font-family:var(--mono);font-size:.85em;padding:6px 16px;cursor:pointer;
+  letter-spacing:.08em;text-transform:uppercase;transition:all .2s;border-radius:3px;
+}
+.nav-btn:hover{color:var(--cyan);border-color:var(--border-b)}
+.nav-btn.active{color:var(--green);border-color:var(--green);
+  background:var(--green-glow);text-shadow:0 0 10px var(--green);
+  box-shadow:0 0 12px var(--green-glow);
+}
+#topright{display:flex;align-items:center;gap:20px;font-size:.8em;color:var(--dim)}
+#clock{font-family:var(--display);font-size:.9em;color:var(--cyan);letter-spacing:.1em}
+.host-info{color:var(--dimmer);letter-spacing:.05em}
+/* ── LAYOUT ── */
+#app{flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
+.page{display:none;flex-direction:column;gap:14px}
+.page.active{display:flex}
+/* ── STAT CARDS ── */
+.cards{display:grid;gap:12px}
+.cards-3{grid-template-columns:repeat(3,1fr)}
+.cards-4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:4px;
+  padding:14px 18px;position:relative;overflow:hidden;
+  transition:border-color .3s;
+}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.card.green::before{background:var(--green);box-shadow:0 0 10px var(--green)}
+.card.amber::before{background:var(--amber);box-shadow:0 0 10px var(--amber)}
+.card.red::before{background:var(--red);box-shadow:0 0 10px var(--red)}
+.card.cyan::before{background:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.card-label{font-size:.72em;color:var(--dim);letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px}
+.card-value{font-family:var(--display);font-size:2em;font-weight:700;line-height:1}
+.card-value.green{color:var(--green);text-shadow:0 0 15px var(--green)}
+.card-value.amber{color:var(--amber);text-shadow:0 0 15px var(--amber)}
+.card-value.red{color:var(--red);text-shadow:0 0 15px var(--red)}
+.card-value.cyan{color:var(--cyan);text-shadow:0 0 15px var(--cyan)}
+.card-sub{font-size:.75em;color:var(--dim);margin-top:6px}
+.card-bar{height:3px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden}
+.card-bar-fill{height:100%;border-radius:2px;transition:width .8s ease}
+/* ── SECTION HEADERS ── */
+.section-head{display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:8px;
+}
+.section-title{font-family:var(--display);font-size:.78em;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--dim);
+  display:flex;align-items:center;gap:8px;
+}
+.section-title .dot{width:7px;height:7px;border-radius:50%;animation:pulse 2s infinite}
+.dot.green{background:var(--green);box-shadow:0 0 8px var(--green)}
+.dot.amber{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.dot.red{background:var(--red);box-shadow:0 0 8px var(--red)}
+.dot.cyan{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* ── CHART PANELS ── */
+.chart-panel{background:var(--surface);border:1px solid var(--border);
+  border-radius:4px;padding:16px;
+}
+.chart-wrap{position:relative;width:100%}
+.chart-wrap canvas{width:100%!important}
+/* ── GRID LAYOUTS ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.grid-65-35{display:grid;grid-template-columns:1.8fr 1fr;gap:14px}
+/* ── PROCESS TABLE (BTOP STYLE) ── */
+.proc-panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.proc-header-bar{display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;background:var(--surface2);border-bottom:1px solid var(--border);
+}
+.proc-search{background:var(--bg);border:1px solid var(--border);color:var(--text);
+  font-family:var(--mono);font-size:.82em;padding:4px 10px;border-radius:3px;width:180px;
+  outline:none;
+}
+.proc-search:focus{border-color:var(--cyan)}
+.proc-count{font-size:.75em;color:var(--dim)}
+.proc-table-wrap{max-height:300px;overflow-y:auto}
+.proc-table-wrap::-webkit-scrollbar{width:5px}
+.proc-table-wrap::-webkit-scrollbar-track{background:var(--bg)}
+.proc-table-wrap::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:3px}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--surface2);position:sticky;top:0;z-index:5}
+thead th{padding:7px 12px;text-align:left;font-family:var(--display);font-size:.68em;
+  letter-spacing:.15em;color:var(--dim);cursor:pointer;user-select:none;
+  border-bottom:1px solid var(--border);white-space:nowrap;
+  transition:color .2s;
+}
+thead th:hover{color:var(--cyan)}
+thead th.sort-asc{color:var(--green)}
+thead th.sort-desc{color:var(--green)}
+thead th .sort-icon{margin-left:4px;opacity:.6}
+tbody tr{border-bottom:1px solid rgba(26,39,68,.5);transition:background .15s;cursor:default}
+tbody tr:hover{background:rgba(0,229,255,.04)}
+tbody tr.danger-row{background:rgba(255,23,68,.06)}
+tbody td{padding:6px 12px;font-size:.82em;white-space:nowrap}
+.pid{color:var(--dimmer);font-size:.78em}
+.pname{color:var(--cyan);font-weight:bold;font-family:var(--mono)}
+.cpu-val,.mem-val,.disk-val{font-family:var(--display);font-size:.76em;font-weight:700}
+.v-green{color:var(--green)}
+.v-amber{color:var(--amber)}
+.v-red{color:var(--red);text-shadow:0 0 8px var(--red-glow)}
+.badge{display:inline-block;padding:2px 7px;border-radius:2px;font-size:.72em;
+  letter-spacing:.1em;text-transform:uppercase;
+}
+.badge-run{background:rgba(0,255,136,.12);color:var(--green);border:1px solid rgba(0,255,136,.25)}
+.badge-sleep{background:rgba(74,96,128,.15);color:var(--dim);border:1px solid var(--border)}
+.badge-stop{background:rgba(255,23,68,.12);color:var(--red);border:1px solid rgba(255,23,68,.25)}
+/* ── LOGS ── */
+.log-panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;
+  display:flex;flex-direction:column;
+}
+.log-box{font-size:.78em;line-height:1.85;overflow-y:auto;flex:1;
+  padding:10px 14px;max-height:220px;
+}
+.log-box::-webkit-scrollbar{width:4px}
+.log-box::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:2px}
+.log-entry{display:flex;gap:10px;padding:1px 0}
+.log-ts{color:var(--dimmer);flex-shrink:0;font-size:.88em}
+.log-tag{flex-shrink:0;font-family:var(--display);font-size:.7em;padding:1px 6px;
+  border-radius:2px;margin-top:1px;letter-spacing:.05em;
+}
+.tag-info{background:rgba(0,229,255,.1);color:var(--cyan)}
+.tag-pass{background:rgba(0,255,136,.1);color:var(--green)}
+.tag-warn{background:rgba(255,179,0,.12);color:var(--amber)}
+.tag-alert{background:rgba(255,23,68,.12);color:var(--red)}
+.log-msg{color:var(--text);opacity:.85}
+/* ── DANGER ALERTS ── */
+#danger-section{display:none}
+#danger-section.has-alerts{display:block}
+.alert-panel{background:rgba(255,23,68,.07);border:1px solid rgba(255,23,68,.35);
+  border-radius:4px;overflow:hidden;
+}
+.alert-header{background:rgba(255,23,68,.12);padding:8px 14px;
+  display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,23,68,.25);
+}
+.alert-header-title{font-family:var(--display);font-size:.72em;letter-spacing:.18em;
+  color:var(--red);text-shadow:0 0 10px var(--red);
+}
+.alert-blink{animation:ablink 1s infinite}
+@keyframes ablink{0%,100%{opacity:1}50%{opacity:.3}}
+.alert-list{padding:8px 14px;display:flex;flex-direction:column;gap:6px}
+.alert-item{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;
+  background:rgba(255,23,68,.06);border:1px solid rgba(255,23,68,.2);
+  border-radius:3px;font-size:.8em;
+}
+.alert-icon{color:var(--red);font-size:1.1em;flex-shrink:0;margin-top:1px}
+.alert-body{flex:1}
+.alert-proc{color:var(--red);font-weight:bold}
+.alert-detail{color:var(--text);opacity:.75;margin-top:2px;font-size:.9em}
+.alert-time{color:var(--dimmer);font-size:.8em;flex-shrink:0;margin-left:auto;
+  padding-left:10px;white-space:nowrap;
+}
+/* ── MEMORY DONUT ── */
+.donut-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:8px;
+}
+.donut-wrap canvas{max-width:180px!important;max-height:180px!important}
+.donut-legend{display:flex;flex-direction:column;gap:6px;width:100%;padding:0 8px}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:.78em}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.legend-label{color:var(--dim);flex:1}
+.legend-val{color:var(--text);font-family:var(--display);font-size:.88em}
+/* ── DISK BARS ── */
+.disk-part{margin-bottom:12px}
+.disk-part-head{display:flex;justify-content:space-between;margin-bottom:4px;font-size:.8em}
+.disk-part-name{color:var(--cyan)}
+.disk-part-vals{color:var(--dim)}
+.disk-bar{height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+.disk-bar-fill{height:100%;border-radius:4px;transition:width 1s ease}
+/* ── CPU CORES ── */
+.core-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.core-item{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:8px}
+.core-label{font-size:.7em;color:var(--dim);margin-bottom:4px}
+.core-val{font-family:var(--display);font-size:.95em;font-weight:700}
+.core-bar{height:4px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+.core-bar-fill{height:100%;border-radius:2px;transition:width .8s ease}
+/* ── LOAD AVG ── */
+.load-row{display:flex;gap:14px;margin-top:6px}
+.load-item{text-align:center;background:var(--surface2);border:1px solid var(--border);
+  border-radius:3px;padding:8px 14px;flex:1;
+}
+.load-label{font-size:.7em;color:var(--dim);margin-bottom:4px}
+.load-val{font-family:var(--display);font-size:1.1em;color:var(--cyan)}
+/* ── UPTIME BAR ── */
+.uptime-strip{background:var(--surface2);border:1px solid var(--border);border-radius:3px;
+  padding:8px 14px;display:flex;align-items:center;gap:16px;font-size:.78em;
+}
+.uptime-strip span{color:var(--dim)}
+.uptime-strip strong{color:var(--green)}
+/* ── SCROLLBAR GLOBAL ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border-b);border-radius:3px}
+/* ── RESPONSIVE FALLBACK ── */
+@media(max-width:900px){
+  .cards-3,.cards-4{grid-template-columns:1fr 1fr}
+  .grid-2,.grid-65-35{grid-template-columns:1fr}
+}
+/* ── FADE-IN ── */
+.page.active .card,.page.active .chart-panel,.page.active .proc-panel,
+.page.active .log-panel,.page.active .alert-panel{
+  animation:fadein .3s ease;
+}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div id="logo">SYS<span>WATCH</span></div>
+  <nav>
+    <button class="nav-btn active" onclick="navigate('dashboard')">⬡ Dashboard</button>
+    <button class="nav-btn" onclick="navigate('cpu')">⬡ CPU</button>
+    <button class="nav-btn" onclick="navigate('memory')">⬡ Memory</button>
+    <button class="nav-btn" onclick="navigate('disk')">⬡ Disk</button>
+  </nav>
+  <div id="topright">
+    <div class="host-info">rhel10 · kernel 6.6.0</div>
+    <div id="clock">--:--:--</div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+
+  <!-- ═══════════════════ DASHBOARD PAGE ═══════════════════ -->
+  <div class="page active" id="page-dashboard">
+
+    <!-- STAT CARDS -->
+    <div class="cards cards-3">
+      <div class="card" id="card-cpu">
+        <div class="card-label">CPU Usage</div>
+        <div class="card-value" id="cv-cpu">0%</div>
+        <div class="card-sub" id="cs-cpu">threshold: 80%</div>
+        <div class="card-bar"><div class="card-bar-fill" id="cb-cpu" style="background:var(--green)"></div></div>
+      </div>
+      <div class="card" id="card-mem">
+        <div class="card-label">Memory Usage</div>
+        <div class="card-value" id="cv-mem">0%</div>
+        <div class="card-sub" id="cs-mem">0 MB / 16384 MB</div>
+        <div class="card-bar"><div class="card-bar-fill" id="cb-mem" style="background:var(--cyan)"></div></div>
+      </div>
+      <div class="card" id="card-disk">
+        <div class="card-label">Disk Usage (/)</div>
+        <div class="card-value" id="cv-disk">0%</div>
+        <div class="card-sub" id="cs-disk">0 GB / 500 GB</div>
+        <div class="card-bar"><div class="card-bar-fill" id="cb-disk" style="background:var(--amber)"></div></div>
+      </div>
+    </div>
+
+    <!-- UPTIME STRIP -->
+    <div class="uptime-strip">
+      <span>UPTIME</span><strong id="uptime-val">0d 0h 0m</strong>
+      <span>|</span>
+      <span>LOAD AVG</span>
+      <strong id="load-strip">0.00 / 0.00 / 0.00</strong>
+      <span>|</span>
+      <span>PROCS</span><strong id="proc-total">20</strong>
+      <span>|</span>
+      <span>HOSTNAME</span><strong>rhel10.local</strong>
+    </div>
+
+    <!-- REAL-TIME MULTI CHART -->
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title">
+          <span class="dot green"></span>
+          REAL-TIME RESOURCE USAGE — 60s WINDOW
+        </div>
+        <div style="font-size:.73em;color:var(--dimmer)">
+          <span style="color:var(--green)">▬</span> CPU &nbsp;
+          <span style="color:var(--cyan)">▬</span> Memory &nbsp;
+          <span style="color:var(--amber)">▬</span> Disk
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:200px">
+        <canvas id="chart-main"></canvas>
+      </div>
+    </div>
+
+    <!-- DANGER ALERTS (hidden when empty) -->
+    <div id="danger-section">
+      <div class="alert-panel">
+        <div class="alert-header">
+          <span class="alert-blink" style="color:var(--red);font-size:1.1em">⚠</span>
+          <span class="alert-header-title">⬡ DANGER ALERTS — RESOURCE SPIKE DETECTED</span>
+          <span style="margin-left:auto;font-size:.72em;color:var(--dimmer)">auto-clears after 5h</span>
+        </div>
+        <div class="alert-list" id="alert-list"></div>
+      </div>
+    </div>
+
+    <!-- PROCESS TABLE -->
+    <div class="proc-panel">
+      <div class="proc-header-bar">
+        <div class="section-title">
+          <span class="dot cyan"></span>
+          PROCESSES
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <input class="proc-search" placeholder="filter process…" id="proc-filter" oninput="renderProcTable()">
+          <span class="proc-count" id="proc-count">20 processes</span>
+        </div>
+      </div>
+      <div class="proc-table-wrap">
+        <table id="proc-table">
+          <thead>
+            <tr>
+              <th onclick="setSort('pid')">PID <span class="sort-icon" id="sh-pid"></span></th>
+              <th onclick="setSort('name')">PROCESS <span class="sort-icon" id="sh-name"></span></th>
+              <th onclick="setSort('cpu')">CPU % <span class="sort-icon" id="sh-cpu"></span></th>
+              <th onclick="setSort('mem')">MEM (MB) <span class="sort-icon" id="sh-mem"></span></th>
+              <th onclick="setSort('disk')">DISK I/O <span class="sort-icon" id="sh-disk"></span></th>
+              <th onclick="setSort('status')">STATUS <span class="sort-icon" id="sh-status"></span></th>
+            </tr>
+          </thead>
+          <tbody id="proc-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- BOTTOM ROW: LOGS -->
+    <div class="log-panel">
+      <div class="proc-header-bar">
+        <div class="section-title">
+          <span class="dot green"></span>
+          SYSTEM LOG — LATEST ENTRIES
+        </div>
+        <span style="font-size:.72em;color:var(--dimmer)">rolling · last 20</span>
+      </div>
+      <div class="log-box" id="log-main"></div>
+    </div>
+
+  </div><!-- /dashboard -->
+
+  <!-- ═══════════════════ CPU PAGE ═══════════════════ -->
+  <div class="page" id="page-cpu">
+
+    <div class="cards cards-4">
+      <div class="card green">
+        <div class="card-label">Current CPU</div>
+        <div class="card-value green" id="cpu-card-current">0%</div>
+        <div class="card-sub">threshold: 80%</div>
+        <div class="card-bar"><div class="card-bar-fill" id="cpb-current" style="background:var(--green)"></div></div>
+      </div>
+      <div class="card cyan">
+        <div class="card-label">1m Load Avg</div>
+        <div class="card-value cyan" id="cpu-load1">0.00</div>
+        <div class="card-sub">system load</div>
+      </div>
+      <div class="card cyan">
+        <div class="card-label">5m Load Avg</div>
+        <div class="card-value cyan" id="cpu-load5">0.00</div>
+        <div class="card-sub">system load</div>
+      </div>
+      <div class="card cyan">
+        <div class="card-label">15m Load Avg</div>
+        <div class="card-value cyan" id="cpu-load15">0.00</div>
+        <div class="card-sub">system load</div>
+      </div>
+    </div>
+
+    <!-- CPU CHART -->
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title"><span class="dot green"></span>CPU UTILISATION — 60s WINDOW</div>
+      </div>
+      <div class="chart-wrap" style="height:180px">
+        <canvas id="chart-cpu"></canvas>
+      </div>
+    </div>
+
+    <!-- CPU CORES -->
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title"><span class="dot cyan"></span>CORE BREAKDOWN</div>
+        <span style="font-size:.72em;color:var(--dimmer)">8 logical cores</span>
+      </div>
+      <div class="core-grid" id="core-grid"></div>
+    </div>
+
+    <!-- CPU DANGER ALERTS -->
+    <div id="cpu-danger-section">
+      <div class="alert-panel">
+        <div class="alert-header">
+          <span class="alert-blink" style="color:var(--red)">⚠</span>
+          <span class="alert-header-title">CPU DANGER ALERTS</span>
+          <span style="margin-left:auto;font-size:.72em;color:var(--dimmer)">auto-clears after 5h</span>
+        </div>
+        <div class="alert-list" id="cpu-alert-list"></div>
+      </div>
+    </div>
+
+    <!-- TOP CPU PROCESSES -->
+    <div class="proc-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot green"></span>TOP CPU CONSUMERS</div>
+        <span class="proc-count">top 10 by cpu%</span>
+      </div>
+      <div class="proc-table-wrap">
+        <table>
+          <thead><tr>
+            <th>PID</th><th>PROCESS</th><th>CPU %</th><th>MEM (MB)</th><th>STATUS</th>
+          </tr></thead>
+          <tbody id="cpu-proc-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CPU LOGS -->
+    <div class="log-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot green"></span>CPU LOGS</div>
+        <span style="font-size:.72em;color:var(--dimmer)">latest entries</span>
+      </div>
+      <div class="log-box" id="log-cpu"></div>
+    </div>
+
+  </div><!-- /cpu -->
+
+  <!-- ═══════════════════ MEMORY PAGE ═══════════════════ -->
+  <div class="page" id="page-memory">
+
+    <div class="cards cards-4">
+      <div class="card cyan">
+        <div class="card-label">Memory Used</div>
+        <div class="card-value cyan" id="mem-card-pct">0%</div>
+        <div class="card-sub" id="mem-card-sub">0 MB / 16384 MB</div>
+        <div class="card-bar"><div class="card-bar-fill" id="mb-bar" style="background:var(--cyan)"></div></div>
+      </div>
+      <div class="card green">
+        <div class="card-label">Available</div>
+        <div class="card-value green" id="mem-avail">0 MB</div>
+        <div class="card-sub">free + cache</div>
+      </div>
+      <div class="card amber">
+        <div class="card-label">Cached</div>
+        <div class="card-value amber" id="mem-cached">0 MB</div>
+        <div class="card-sub">buffer/cache</div>
+      </div>
+      <div class="card" id="mem-swap-card">
+        <div class="card-label">Swap Used</div>
+        <div class="card-value" id="mem-swap">0 MB</div>
+        <div class="card-sub">/ 4096 MB</div>
+        <div class="card-bar"><div class="card-bar-fill" id="swap-bar" style="background:var(--purple)"></div></div>
+      </div>
+    </div>
+
+    <div class="grid-65-35">
+      <!-- MEMORY TIME SERIES -->
+      <div class="chart-panel">
+        <div class="section-head">
+          <div class="section-title"><span class="dot cyan"></span>MEMORY USAGE — 60s WINDOW</div>
+        </div>
+        <div class="chart-wrap" style="height:220px">
+          <canvas id="chart-mem"></canvas>
+        </div>
+      </div>
+      <!-- MEMORY DONUT -->
+      <div class="chart-panel">
+        <div class="section-head">
+          <div class="section-title"><span class="dot cyan"></span>BREAKDOWN</div>
+        </div>
+        <div class="donut-wrap">
+          <canvas id="chart-mem-donut" width="180" height="180"></canvas>
+          <div class="donut-legend" id="donut-legend"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEMORY DANGER ALERTS -->
+    <div id="mem-danger-section">
+      <div class="alert-panel">
+        <div class="alert-header">
+          <span class="alert-blink" style="color:var(--red)">⚠</span>
+          <span class="alert-header-title">MEMORY DANGER ALERTS</span>
+          <span style="margin-left:auto;font-size:.72em;color:var(--dimmer)">auto-clears after 5h</span>
+        </div>
+        <div class="alert-list" id="mem-alert-list"></div>
+      </div>
+    </div>
+
+    <!-- TOP MEMORY PROCESSES -->
+    <div class="proc-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot cyan"></span>TOP MEMORY CONSUMERS</div>
+        <span class="proc-count">top 10 by mem</span>
+      </div>
+      <div class="proc-table-wrap">
+        <table>
+          <thead><tr>
+            <th>PID</th><th>PROCESS</th><th>MEM (MB)</th><th>CPU %</th><th>STATUS</th>
+          </tr></thead>
+          <tbody id="mem-proc-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- MEMORY LOGS -->
+    <div class="log-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot cyan"></span>MEMORY LOGS</div>
+      </div>
+      <div class="log-box" id="log-mem"></div>
+    </div>
+
+  </div><!-- /memory -->
+
+  <!-- ═══════════════════ DISK PAGE ═══════════════════ -->
+  <div class="page" id="page-disk">
+
+    <div class="cards cards-4">
+      <div class="card amber">
+        <div class="card-label">Disk Usage (/)</div>
+        <div class="card-value amber" id="disk-card-pct">0%</div>
+        <div class="card-sub" id="disk-card-sub">0 GB / 500 GB</div>
+        <div class="card-bar"><div class="card-bar-fill" id="disk-bar-root" style="background:var(--amber)"></div></div>
+      </div>
+      <div class="card green">
+        <div class="card-label">Read Speed</div>
+        <div class="card-value green" id="disk-read">0.0 MB/s</div>
+        <div class="card-sub">current I/O read</div>
+      </div>
+      <div class="card green">
+        <div class="card-label">Write Speed</div>
+        <div class="card-value green" id="disk-write">0.0 MB/s</div>
+        <div class="card-sub">current I/O write</div>
+      </div>
+      <div class="card cyan">
+        <div class="card-label">Inodes Used</div>
+        <div class="card-value cyan" id="disk-inodes">32%</div>
+        <div class="card-sub">filesystem inodes</div>
+      </div>
+    </div>
+
+    <!-- DISK I/O CHART -->
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title"><span class="dot amber"></span>DISK I/O — 60s WINDOW</div>
+        <div style="font-size:.73em;color:var(--dimmer)">
+          <span style="color:var(--green)">▬</span> Read &nbsp;
+          <span style="color:var(--amber)">▬</span> Write
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:180px">
+        <canvas id="chart-disk-io"></canvas>
+      </div>
+    </div>
+
+    <!-- PARTITIONS -->
+    <div class="chart-panel">
+      <div class="section-head">
+        <div class="section-title"><span class="dot amber"></span>PARTITION USAGE</div>
+      </div>
+      <div id="partition-list"></div>
+    </div>
+
+    <!-- DISK DANGER ALERTS -->
+    <div id="disk-danger-section">
+      <div class="alert-panel">
+        <div class="alert-header">
+          <span class="alert-blink" style="color:var(--red)">⚠</span>
+          <span class="alert-header-title">DISK DANGER ALERTS</span>
+          <span style="margin-left:auto;font-size:.72em;color:var(--dimmer)">auto-clears after 5h</span>
+        </div>
+        <div class="alert-list" id="disk-alert-list"></div>
+      </div>
+    </div>
+
+    <!-- TOP DISK PROCESSES -->
+    <div class="proc-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot amber"></span>TOP DISK I/O CONSUMERS</div>
+        <span class="proc-count">top 10 by disk i/o</span>
+      </div>
+      <div class="proc-table-wrap">
+        <table>
+          <thead><tr>
+            <th>PID</th><th>PROCESS</th><th>DISK I/O (MB/s)</th><th>CPU %</th><th>MEM (MB)</th>
+          </tr></thead>
+          <tbody id="disk-proc-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DISK LOGS -->
+    <div class="log-panel">
+      <div class="proc-header-bar">
+        <div class="section-title"><span class="dot amber"></span>DISK LOGS</div>
+      </div>
+      <div class="log-box" id="log-disk"></div>
+    </div>
+
+  </div><!-- /disk -->
+
+</div><!-- /app -->
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ══════════════════════════════════════════════════════════════
+const CFG = {
+  CPU_THRESHOLD: 80,
+  MEM_THRESHOLD: 75,
+  DISK_THRESHOLD: 90,
+  SERVICES: ['sshd','crond','nginx'],
+  DANGER_CPU_PROC: 72,
+  DANGER_MEM_PROC: 450,
+  DANGER_DISK_PROC: 6,
+  HISTORY: 60,
+  TICK: 1000,
+  ALERT_TTL: 5 * 60 * 60 * 1000,
+  TOTAL_MEM: 16384,
+  TOTAL_DISK: 500,
+};
+
+const CHART_OPTS = {
+  animation:{duration:0},
+  responsive:true,maintainAspectRatio:false,
+  plugins:{legend:{display:false},tooltip:{
+    backgroundColor:'#0c1220',borderColor:'#1a2744',borderWidth:1,
+    titleColor:'#c8d6e5',bodyColor:'#4a6080',
+    callbacks:{label:ctx=>`${ctx.dataset.label||''}: ${ctx.parsed.y.toFixed(1)}%`}
+  }},
+  scales:{
+    x:{display:false,grid:{display:false}},
+    y:{min:0,max:100,grid:{color:'rgba(26,39,68,.5)',drawBorder:false},
+      ticks:{color:'#4a6080',font:{family:"'Share Tech Mono',monospace",size:10},
+        callback:v=>v+'%'
+      }
+    }
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+const H = CFG.HISTORY;
+let cpuHist = Array(H).fill(30), memHist = Array(H).fill(50), diskHist = Array(H).fill(67);
+let ioReadHist = Array(H).fill(2), ioWriteHist = Array(H).fill(1);
+let cpu = 35, mem = 52, disk = 67, ioRead = 3.5, ioWrite = 1.8;
+let swapUsed = 120, cached = 3200;
+let loadAvg = [0.72, 0.88, 0.95];
+let startTime = Date.now();
+let tick = 0;
+
+let dangerAlerts = [], cpuAlerts = [], memAlerts = [], diskAlerts = [];
+let globalLogs = [], cpuLogs = [], memLogs = [], diskLogs = [];
+
+let sortKey = 'cpu', sortDir = 'desc';
+
+// Simulated inodes (slowly drift)
+let inodesUsed = 32;
+
+// CPU cores
+let coreValues = [28,35,42,18,55,30,25,48];
+
+// Disk partitions
+const partitions = [
+  {name:'/ (root)', total:500, used:0},
+  {name:'/boot',    total:1,   used:0.45},
+  {name:'/home',    total:200, used:0},
+  {name:'/var',     total:100, used:0},
+  {name:'/tmp',     total:20,  used:0},
+];
+
+// Process list (base values)
+const PROC_BASE = [
+  {pid:1,     name:'systemd',       cpuB:.1,  memB:12,  diskB:.01},
+  {pid:401,   name:'rsyslogd',      cpuB:.2,  memB:8,   diskB:.5},
+  {pid:523,   name:'NetworkManager',cpuB:.3,  memB:15,  diskB:.02},
+  {pid:567,   name:'sshd',          cpuB:.1,  memB:5,   diskB:.01},
+  {pid:601,   name:'crond',         cpuB:.1,  memB:3,   diskB:.01},
+  {pid:892,   name:'nginx',         cpuB:1.2, memB:45,  diskB:1.2},
+  {pid:1122,  name:'redis-server',  cpuB:2.1, memB:68,  diskB:.8},
+  {pid:1243,  name:'mysqld',        cpuB:12.3,memB:234, diskB:2.3},
+  {pid:2341,  name:'postgres',      cpuB:8.5, memB:178, diskB:3.1},
+  {pid:2891,  name:'node',          cpuB:15.2,memB:156, diskB:.5},
+  {pid:3421,  name:'python3',       cpuB:5.8, memB:89,  diskB:.3},
+  {pid:4521,  name:'java',          cpuB:18.5,memB:512, diskB:1.5},
+  {pid:5231,  name:'dockerd',       cpuB:3.2, memB:145, diskB:4.2},
+  {pid:6234,  name:'elasticsearch', cpuB:22.1,memB:890, diskB:6.5},
+  {pid:7123,  name:'prometheus',    cpuB:4.5, memB:234, diskB:2.1},
+  {pid:7891,  name:'grafana',       cpuB:2.8, memB:89,  diskB:.4},
+  {pid:8234,  name:'rabbitmq',      cpuB:6.3, memB:178, diskB:1.8},
+  {pid:9123,  name:'mongod',        cpuB:9.8, memB:345, diskB:4.5},
+  {pid:9876,  name:'kafka',         cpuB:14.2,memB:678, diskB:8.9},
+  {pid:10234, name:'logstash',      cpuB:11.5,memB:445, diskB:3.2},
+];
+let procs = PROC_BASE.map(p=>({...p,cpu:p.cpuB,mem:p.memB,disk:p.diskB,
+  status:'running',statusBase:'running'}));
+
+// ══════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════
+const clamp=(v,mn,mx)=>Math.max(mn,Math.min(mx,v));
+function noise(v,base,amp,mn,mx){
+  const n=v+(Math.random()-.5)*amp;
+  const g=n+(base-n)*.04;
+  return clamp(g,mn,mx);
+}
+function cpuColor(v){return v>70?'var(--red)':v>40?'var(--amber)':'var(--green)'}
+function memColor(v){return v>500?'var(--red)':v>250?'var(--amber)':'var(--green)'}
+function diskColor(v){return v>6?'var(--red)':v>3?'var(--amber)':'var(--green)'}
+function pctColor(v){return v>=80?'var(--red)':v>=60?'var(--amber)':'var(--green)'}
+function cssClass(v){return v>=80?'v-red':v>=60?'v-amber':'v-green'}
+function fmt(v,d=1){return v.toFixed(d)}
+function ts(){return new Date().toLocaleTimeString('en-GB')}
+function fmtUptime(ms){
+  const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60),d=Math.floor(h/24);
+  return `${d}d ${h%24}h ${m%60}m`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// CHART SETUP
+// ══════════════════════════════════════════════════════════════
+const labels = Array(H).fill('');
+
+function makeLineChart(id,datasets){
+  const ctx=document.getElementById(id).getContext('2d');
+  return new Chart(ctx,{
+    type:'line',
+    data:{labels:[...labels],datasets},
+    options:JSON.parse(JSON.stringify(CHART_OPTS))
+  });
+}
+
+// Dashboard multi chart
+const chartMain = makeLineChart('chart-main',[
+  {label:'CPU',data:[...cpuHist],borderColor:'#00ff88',backgroundColor:'rgba(0,255,136,.06)',
+   borderWidth:1.5,pointRadius:0,tension:.4,fill:true},
+  {label:'Memory',data:[...memHist],borderColor:'#00e5ff',backgroundColor:'rgba(0,229,255,.06)',
+   borderWidth:1.5,pointRadius:0,tension:.4,fill:true},
+  {label:'Disk',data:[...diskHist],borderColor:'#ffb300',backgroundColor:'rgba(255,179,0,.06)',
+   borderWidth:1.5,pointRadius:0,tension:.4,fill:true},
+]);
+
+// CPU page chart
+const chartCPU = makeLineChart('chart-cpu',[
+  {label:'CPU',data:[...cpuHist],borderColor:'#00ff88',backgroundColor:'rgba(0,255,136,.1)',
+   borderWidth:2,pointRadius:0,tension:.4,fill:true},
+]);
+
+// Memory page chart
+const chartMem = makeLineChart('chart-mem',[
+  {label:'Memory',data:[...memHist],borderColor:'#00e5ff',backgroundColor:'rgba(0,229,255,.1)',
+   borderWidth:2,pointRadius:0,tension:.4,fill:true},
+]);
+
+// Disk I/O chart (different scale — MB/s)
+const diskIOOpts = JSON.parse(JSON.stringify(CHART_OPTS));
+diskIOOpts.scales.y.max=30;
+diskIOOpts.scales.y.min=0;
+diskIOOpts.plugins.tooltip.callbacks.label=ctx=>`${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} MB/s`;
+diskIOOpts.scales.y.ticks.callback=v=>v+'MB/s';
+const ctxDiskIO=document.getElementById('chart-disk-io').getContext('2d');
+const chartDiskIO=new Chart(ctxDiskIO,{
+  type:'line',
+  data:{labels:[...labels],datasets:[
+    {label:'Read',data:[...ioReadHist],borderColor:'#00ff88',backgroundColor:'rgba(0,255,136,.08)',
+     borderWidth:1.5,pointRadius:0,tension:.4,fill:true},
+    {label:'Write',data:[...ioWriteHist],borderColor:'#ffb300',backgroundColor:'rgba(255,179,0,.08)',
+     borderWidth:1.5,pointRadius:0,tension:.4,fill:true},
+  ]},
+  options:diskIOOpts
+});
+
+// Memory donut
+const memDonutCtx=document.getElementById('chart-mem-donut').getContext('2d');
+const chartMemDonut=new Chart(memDonutCtx,{
+  type:'doughnut',
+  data:{
+    labels:['Used','Cached','Free','Swap'],
+    datasets:[{data:[52,20,25,3],
+      backgroundColor:['#00e5ff','#7c4dff','#1a2744','#ff1744'],
+      borderColor:'#060a12',borderWidth:3,
+    }]
+  },
+  options:{
+    responsive:false,maintainAspectRatio:false,animation:{duration:500},
+    plugins:{legend:{display:false},tooltip:{
+      backgroundColor:'#0c1220',borderColor:'#1a2744',borderWidth:1,
+      titleColor:'#c8d6e5',bodyColor:'#4a6080',
+    }},
+    cutout:'70%',
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// SIMULATION UPDATE
+// ══════════════════════════════════════════════════════════════
+function updateSim(){
+  // System metrics
+  cpu  = noise(cpu, 38, 10, 2, 99);
+  mem  = noise(mem, 55, 5, 20, 95);
+  disk = noise(disk, 67, .3, 60, 85);
+  ioRead  = noise(ioRead, 4, 3, .1, 28);
+  ioWrite = noise(ioWrite, 2, 2, .05, 18);
+  swapUsed= noise(swapUsed, 120, 10, 0, 1024);
+  cached  = noise(cached, 3200, 100, 1000, 6000);
+  inodesUsed = noise(inodesUsed, 32, .5, 10, 80);
+
+  // Occasionally spike a process for demo (every ~30 ticks)
+  if(tick%30===0){
+    const idx=Math.floor(Math.random()*procs.length);
+    procs[idx].cpu=clamp(procs[idx].cpuB*5+Math.random()*20,0,99);
+    procs[idx].mem=clamp(procs[idx].memB*2+Math.random()*100,0,2048);
+    procs[idx].disk=clamp(procs[idx].diskB*3+Math.random()*5,0,50);
+  }
+
+  // Load average (drift slowly)
+  loadAvg=loadAvg.map((v,i)=>noise(v,[.72,.88,.95][i],.15,.01,8));
+
+  // Core values
+  coreValues=coreValues.map(v=>noise(v,cpu*.9,12,0,100));
+
+  // Partition used values (disk drifts)
+  partitions[0].used = (disk/100)*partitions[0].total;
+  partitions[2].used = noise(partitions[2].used||80, 80, 1, 50, 180);
+  partitions[3].used = noise(partitions[3].used||45, 45, .5, 20, 90);
+  partitions[4].used = noise(partitions[4].used||3, 3, .2, .5, 18);
+
+  // Update processes
+  procs=procs.map(p=>{
+    let pCPU=noise(p.cpu,p.cpuB,p.cpuB*.35,0,99);
+    let pMem=noise(p.mem,p.memB,p.memB*.08,1,2048);
+    let pDisk=noise(p.disk,p.diskB,p.diskB*.4,0,50);
+    // Statuses
+    let st=p.status;
+    if(Math.random()<.005) st=st==='running'?'sleeping':'running';
+    return {...p,cpu:pCPU,mem:pMem,disk:pDisk,status:st};
+  });
+
+  // History shift
+  cpuHist.shift(); cpuHist.push(cpu);
+  memHist.shift(); memHist.push(mem);
+  diskHist.shift(); diskHist.push(disk);
+  ioReadHist.shift(); ioReadHist.push(ioRead);
+  ioWriteHist.shift(); ioWriteHist.push(ioWrite);
+
+  // Logs (every 5 ticks)
+  if(tick%5===0) generateLogs();
+  // Check alerts (every 3 ticks)
+  if(tick%3===0) checkAlerts();
+
+  tick++;
+}
+
+// ══════════════════════════════════════════════════════════════
+// LOG SYSTEM
+// ══════════════════════════════════════════════════════════════
+function addLog(arr, level, check, msg){
+  arr.push({ts:ts(), level, check, msg});
+  if(arr.length>120) arr.shift();
+}
+
+function generateLogs(){
+  // Global / CPU
+  const cpuL = cpu>=CFG.CPU_THRESHOLD?'ALERT':cpu>=60?'WARN':'PASS';
+  addLog(globalLogs, cpuL, 'CPU',
+    cpu>=CFG.CPU_THRESHOLD
+      ?`CPU usage ${fmt(cpu)}% exceeds threshold ${CFG.CPU_THRESHOLD}%`
+      :`CPU nominal — ${fmt(cpu)}% utilisation`);
+  addLog(cpuLogs, cpuL, 'CPU',
+    cpu>=CFG.CPU_THRESHOLD
+      ?`Threshold breached — ${fmt(cpu)}% (limit: ${CFG.CPU_THRESHOLD}%)`
+      :`OK — ${fmt(cpu)}% utilisation | load: ${loadAvg.map(v=>fmt(v,2)).join('/')}`);
+
+  // Memory
+  const memL = mem>=CFG.MEM_THRESHOLD?'ALERT':mem>=55?'WARN':'PASS';
+  addLog(globalLogs, memL, 'MEM',
+    mem>=CFG.MEM_THRESHOLD
+      ?`Memory ${fmt(mem)}% used — threshold ${CFG.MEM_THRESHOLD}%`
+      :`Memory OK — ${fmt(mem)}% | avail: ${fmt(CFG.TOTAL_MEM*(1-mem/100))} MB`);
+  addLog(memLogs, memL, 'MEM',
+    `Used: ${fmt(CFG.TOTAL_MEM*mem/100)} MB / ${CFG.TOTAL_MEM} MB | cache: ${fmt(cached)} MB | swap: ${fmt(swapUsed)} MB`);
+
+  // Disk
+  const diskL = disk>=CFG.DISK_THRESHOLD?'ALERT':disk>=75?'WARN':'PASS';
+  addLog(globalLogs, diskL, 'DISK',
+    disk>=CFG.DISK_THRESHOLD
+      ?`Disk ${fmt(disk)}% — threshold ${CFG.DISK_THRESHOLD}%`
+      :`Disk OK — ${fmt(disk)}% | I/O R:${fmt(ioRead,2)} W:${fmt(ioWrite,2)} MB/s`);
+  addLog(diskLogs, diskL, 'DISK',
+    `Usage: ${fmt(disk)}% | Read: ${fmt(ioRead,2)} MB/s | Write: ${fmt(ioWrite,2)} MB/s | inodes: ${fmt(inodesUsed,0)}%`);
+
+  // Services
+  CFG.SERVICES.forEach(svc=>{
+    addLog(globalLogs,'PASS','SVC',`systemctl is-active ${svc}: active`);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// ALERT / DANGER SYSTEM
+// ══════════════════════════════════════════════════════════════
+function checkAlerts(){
+  const now=Date.now();
+  // Clear expired
+  [dangerAlerts,cpuAlerts,memAlerts,diskAlerts].forEach(arr=>{
+    let i=arr.length;
+    while(i--) if(now-arr[i].ts>CFG.ALERT_TTL) arr.splice(i,1);
+  });
+
+  // Check each process for danger
+  procs.forEach(p=>{
+    // CPU danger
+    if(p.cpu>CFG.DANGER_CPU_PROC){
+      const key=`cpu-${p.pid}`;
+      if(!dangerAlerts.find(a=>a.key===key)){
+        const item={key,ts:now,pid:p.pid,name:p.name,
+          msg:`CPU spike — ${fmt(p.cpu)}% (danger: >${CFG.DANGER_CPU_PROC}%)`,
+          type:'CPU', val:fmt(p.cpu)+'%'};
+        dangerAlerts.push(item);
+        cpuAlerts.push({...item});
+      }
+    }
+    // Mem danger
+    if(p.mem>CFG.DANGER_MEM_PROC){
+      const key=`mem-${p.pid}`;
+      if(!dangerAlerts.find(a=>a.key===key)){
+        const item={key,ts:now,pid:p.pid,name:p.name,
+          msg:`Memory spike — ${fmt(p.mem)} MB (danger: >${CFG.DANGER_MEM_PROC} MB)`,
+          type:'MEM', val:fmt(p.mem)+' MB'};
+        dangerAlerts.push(item);
+        memAlerts.push({...item});
+      }
+    }
+    // Disk danger
+    if(p.disk>CFG.DANGER_DISK_PROC){
+      const key=`disk-${p.pid}`;
+      if(!dangerAlerts.find(a=>a.key===key)){
+        const item={key,ts:now,pid:p.pid,name:p.name,
+          msg:`Disk I/O spike — ${fmt(p.disk,2)} MB/s (danger: >${CFG.DANGER_DISK_PROC} MB/s)`,
+          type:'DISK', val:fmt(p.disk,2)+' MB/s'};
+        dangerAlerts.push(item);
+        diskAlerts.push({...item});
+      }
+    }
+  });
+}
+
+function alertItemHTML(a){
+  const age=Math.floor((Date.now()-a.ts)/60000);
+  const ageStr=age<1?'just now':age<60?`${age}m ago`:`${Math.floor(age/60)}h ${age%60}m ago`;
+  return `<div class="alert-item">
+    <div class="alert-icon">⚠</div>
+    <div class="alert-body">
+      <div class="alert-proc">${a.name} <span style="color:var(--dimmer);font-weight:normal">(PID ${a.pid})</span></div>
+      <div class="alert-detail">${a.msg}</div>
+    </div>
+    <div class="alert-time">${ageStr}</div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// SORT / PROCESS TABLE
+// ══════════════════════════════════════════════════════════════
+function setSort(k){
+  if(sortKey===k) sortDir=sortDir==='desc'?'asc':'desc';
+  else{sortKey=k;sortDir='desc';}
+  renderProcTable();
+}
+
+function getSorted(arr, key, dir){
+  return [...arr].sort((a,b)=>{
+    let va=a[key],vb=b[key];
+    if(typeof va==='string') return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
+    return dir==='asc'?va-vb:vb-va;
+  });
+}
+
+function updateSortHeaders(){
+  ['pid','name','cpu','mem','disk','status'].forEach(k=>{
+    const el=document.getElementById('sh-'+k);
+    if(!el) return;
+    el.textContent=sortKey===k?(sortDir==='desc'?'↓':'↑'):'';
+    const th=el.parentElement;
+    th.className=sortKey===k?('sort-'+sortDir):'';
+  });
+}
+
+function procRowHTML(p, cols){
+  const isDanger = p.cpu>CFG.DANGER_CPU_PROC||p.mem>CFG.DANGER_MEM_PROC||p.disk>CFG.DANGER_DISK_PROC;
+  const cls = isDanger?'danger-row':'';
+  const svcBadge = p.status==='running'?'badge-run':p.status==='sleeping'?'badge-sleep':'badge-stop';
+
+  if(cols==='main'){
+    return `<tr class="${cls}">
+      <td class="pid">${p.pid}</td>
+      <td class="pname">${p.name}</td>
+      <td class="cpu-val ${cssClass(p.cpu)}">${fmt(p.cpu)}%</td>
+      <td class="mem-val" style="color:${memColor(p.mem)}">${fmt(p.mem,0)}</td>
+      <td class="disk-val" style="color:${diskColor(p.disk)}">↑${fmt(p.disk,1)} MB/s</td>
+      <td><span class="badge ${svcBadge}">${p.status}</span></td>
+    </tr>`;
+  }
+  if(cols==='cpu'){
+    return `<tr class="${cls}">
+      <td class="pid">${p.pid}</td>
+      <td class="pname">${p.name}</td>
+      <td class="cpu-val ${cssClass(p.cpu)}">${fmt(p.cpu)}%</td>
+      <td class="mem-val" style="color:${memColor(p.mem)}">${fmt(p.mem,0)} MB</td>
+      <td><span class="badge ${svcBadge}">${p.status}</span></td>
+    </tr>`;
+  }
+  if(cols==='mem'){
+    return `<tr class="${cls}">
+      <td class="pid">${p.pid}</td>
+      <td class="pname">${p.name}</td>
+      <td class="mem-val" style="color:${memColor(p.mem)};font-family:var(--display);font-size:.76em">${fmt(p.mem,0)} MB</td>
+      <td class="cpu-val ${cssClass(p.cpu)}">${fmt(p.cpu)}%</td>
+      <td><span class="badge ${svcBadge}">${p.status}</span></td>
+    </tr>`;
+  }
+  if(cols==='disk'){
+    return `<tr class="${cls}">
+      <td class="pid">${p.pid}</td>
+      <td class="pname">${p.name}</td>
+      <td class="disk-val" style="color:${diskColor(p.disk)};font-family:var(--display);font-size:.76em">↑${fmt(p.disk,2)} MB/s</td>
+      <td class="cpu-val ${cssClass(p.cpu)}">${fmt(p.cpu)}%</td>
+      <td class="mem-val" style="color:${memColor(p.mem)}">${fmt(p.mem,0)} MB</td>
+    </tr>`;
+  }
+}
+
+function renderProcTable(){
+  const filter = (document.getElementById('proc-filter')||{value:''}).value.toLowerCase();
+  let sorted = getSorted(procs, sortKey, sortDir);
+  if(filter) sorted=sorted.filter(p=>p.name.toLowerCase().includes(filter)||String(p.pid).includes(filter));
+  document.getElementById('proc-tbody').innerHTML = sorted.map(p=>procRowHTML(p,'main')).join('');
+  document.getElementById('proc-count').textContent = `${sorted.length} processes`;
+  updateSortHeaders();
+}
+
+// ══════════════════════════════════════════════════════════════
+// LOG RENDERER
+// ══════════════════════════════════════════════════════════════
+function logEntryHTML(e){
+  const tagMap={PASS:'tag-pass',WARN:'tag-warn',ALERT:'tag-alert',INFO:'tag-info'};
+  const tagCls=tagMap[e.level]||'tag-info';
+  return `<div class="log-entry">
+    <span class="log-ts">${e.ts}</span>
+    <span class="log-tag ${tagCls}">${e.level}</span>
+    <span style="color:var(--dimmer);flex-shrink:0;font-size:.78em">[${e.check}]</span>
+    <span class="log-msg">${e.msg}</span>
+  </div>`;
+}
+
+function renderLog(elId, arr, n=20){
+  const el=document.getElementById(elId);
+  if(!el) return;
+  const last=arr.slice(-n);
+  el.innerHTML=last.map(logEntryHTML).join('');
+  el.scrollTop=el.scrollHeight;
+}
+
+// ══════════════════════════════════════════════════════════════
+// PAGE RENDERS
+// ══════════════════════════════════════════════════════════════
+function renderDashboard(){
+  // Cards
+  const cpuPct=Math.round(cpu), memPct=Math.round(mem), diskPct=Math.round(disk);
+  setCard('card-cpu','cv-cpu','cb-cpu',cpuPct,'%','threshold: '+CFG.CPU_THRESHOLD+'%');
+  setCard('card-mem','cv-mem','cb-mem',memPct,'%',
+    `${fmt(CFG.TOTAL_MEM*mem/100,0)} MB / ${CFG.TOTAL_MEM} MB`);
+  setCard('card-disk','cv-disk','cb-disk',diskPct,'%',
+    `${fmt((disk/100)*CFG.TOTAL_DISK,0)} GB / ${CFG.TOTAL_DISK} GB`);
+
+  // Uptime
+  document.getElementById('uptime-val').textContent=fmtUptime(Date.now()-startTime);
+  document.getElementById('load-strip').textContent=loadAvg.map(v=>fmt(v,2)).join(' / ');
+
+  // Charts
+  chartMain.data.datasets[0].data=[...cpuHist];
+  chartMain.data.datasets[1].data=[...memHist];
+  chartMain.data.datasets[2].data=[...diskHist];
+  chartMain.update('none');
+
+  // Danger alerts
+  const ds=document.getElementById('danger-section');
+  const al=document.getElementById('alert-list');
+  if(dangerAlerts.length>0){
+    ds.className='has-alerts';
+    al.innerHTML=dangerAlerts.map(alertItemHTML).join('');
+  } else {
+    ds.className='';
+  }
+
+  // Process table
+  renderProcTable();
+  // Logs
+  renderLog('log-main', globalLogs, 20);
+}
+
+function setCard(cardId, valId, barId, pct, suffix, sub){
+  const col = pct>=80?'red':pct>=60?'amber':'green';
+  const card=document.getElementById(cardId);
+  card.className='card '+col;
+  const vEl=document.getElementById(valId);
+  vEl.className='card-value '+col;
+  vEl.textContent=pct+suffix;
+  if(sub){const s=card.querySelector('.card-sub');if(s)s.textContent=sub;}
+  const bar=document.getElementById(barId);
+  if(bar){
+    bar.style.width=pct+'%';
+    bar.style.background=pct>=80?'var(--red)':pct>=60?'var(--amber)':'var(--green)';
+  }
+}
+
+function renderCPUPage(){
+  const cpuPct=Math.round(cpu);
+  // Cards
+  const cvEl=document.getElementById('cpu-card-current');
+  const cpbEl=document.getElementById('cpb-current');
+  const col=pctColor(cpuPct);
+  const cls=cpuPct>=80?'red':cpuPct>=60?'amber':'green';
+  document.getElementById('page-cpu').querySelectorAll('.card')[0].className='card '+cls;
+  cvEl.className='card-value '+cls;
+  cvEl.textContent=cpuPct+'%';
+  cpbEl.style.width=cpuPct+'%';
+  cpbEl.style.background=col;
+
+  document.getElementById('cpu-load1').textContent=fmt(loadAvg[0],2);
+  document.getElementById('cpu-load5').textContent=fmt(loadAvg[1],2);
+  document.getElementById('cpu-load15').textContent=fmt(loadAvg[2],2);
+
+  // Chart
+  chartCPU.data.datasets[0].data=[...cpuHist];
+  chartCPU.update('none');
+
+  // Cores
+  const grid=document.getElementById('core-grid');
+  grid.innerHTML=coreValues.map((v,i)=>{
+    const c=v>=80?'var(--red)':v>=60?'var(--amber)':'var(--green)';
+    return `<div class="core-item">
+      <div class="core-label">Core ${i}</div>
+      <div class="core-val" style="color:${c}">${fmt(v,0)}%</div>
+      <div class="core-bar"><div class="core-bar-fill" style="width:${v}%;background:${c}"></div></div>
+    </div>`;
+  }).join('');
+
+  // Danger alerts
+  const cds=document.getElementById('cpu-danger-section');
+  const cal=document.getElementById('cpu-alert-list');
+  if(cpuAlerts.length>0){cds.style.display='block';cal.innerHTML=cpuAlerts.map(alertItemHTML).join('');}
+  else cds.style.display='none';
+
+  // Top CPU processes
+  const top=getSorted(procs,'cpu','desc').slice(0,10);
+  document.getElementById('cpu-proc-tbody').innerHTML=top.map(p=>procRowHTML(p,'cpu')).join('');
+  // Logs
+  renderLog('log-cpu',cpuLogs,20);
+}
+
+function renderMemPage(){
+  const memPct=Math.round(mem);
+  const usedMB=Math.round(CFG.TOTAL_MEM*mem/100);
+  const availMB=Math.round(CFG.TOTAL_MEM*(1-mem/100));
+  const swapPct=Math.round(swapUsed/4096*100);
+
+  document.getElementById('mem-card-pct').textContent=memPct+'%';
+  document.getElementById('mem-card-sub').textContent=`${usedMB} MB / ${CFG.TOTAL_MEM} MB`;
+  const mb=document.getElementById('mb-bar');
+  mb.style.width=memPct+'%';
+  mb.style.background=pctColor(memPct);
+  document.getElementById('mem-avail').textContent=fmt(availMB,0)+' MB';
+  document.getElementById('mem-cached').textContent=fmt(cached,0)+' MB';
+  document.getElementById('mem-swap').textContent=fmt(swapUsed,0)+' MB';
+  const swBar=document.getElementById('swap-bar');
+  swBar.style.width=swapPct+'%';
+  swBar.style.background='var(--purple)';
+
+  // Chart
+  chartMem.data.datasets[0].data=[...memHist];
+  chartMem.update('none');
+
+  // Donut
+  const freeMB=availMB-Math.round(cached*.3);
+  const donutData=[usedMB,Math.round(cached*.7),Math.max(0,freeMB),Math.round(swapUsed)];
+  chartMemDonut.data.datasets[0].data=donutData;
+  chartMemDonut.update('none');
+
+  // Donut legend
+  const total=donutData.reduce((a,b)=>a+b,0)||1;
+  const legendLabels=['Used','Cached','Free','Swap'];
+  const legendColors=['#00e5ff','#7c4dff','#1a2744','#ff1744'];
+  document.getElementById('donut-legend').innerHTML=legendLabels.map((l,i)=>`
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${legendColors[i]}"></div>
+      <span class="legend-label">${l}</span>
+      <span class="legend-val">${fmt(donutData[i],0)} MB</span>
+    </div>`).join('');
+
+  // Danger alerts
+  const mds=document.getElementById('mem-danger-section');
+  const mal=document.getElementById('mem-alert-list');
+  if(memAlerts.length>0){mds.style.display='block';mal.innerHTML=memAlerts.map(alertItemHTML).join('');}
+  else mds.style.display='none';
+
+  // Top mem processes
+  const top=getSorted(procs,'mem','desc').slice(0,10);
+  document.getElementById('mem-proc-tbody').innerHTML=top.map(p=>procRowHTML(p,'mem')).join('');
+  renderLog('log-mem',memLogs,20);
+}
+
+function renderDiskPage(){
+  const diskPct=Math.round(disk);
+  document.getElementById('disk-card-pct').textContent=diskPct+'%';
+  document.getElementById('disk-card-sub').textContent=`${fmt((disk/100)*CFG.TOTAL_DISK,0)} GB / ${CFG.TOTAL_DISK} GB`;
+  const drb=document.getElementById('disk-bar-root');
+  drb.style.width=diskPct+'%';
+  drb.style.background=pctColor(diskPct);
+  document.getElementById('disk-read').textContent=fmt(ioRead,2)+' MB/s';
+  document.getElementById('disk-write').textContent=fmt(ioWrite,2)+' MB/s';
+  document.getElementById('disk-inodes').textContent=fmt(inodesUsed,0)+'%';
+
+  // I/O chart
+  chartDiskIO.data.datasets[0].data=[...ioReadHist];
+  chartDiskIO.data.datasets[1].data=[...ioWriteHist];
+  chartDiskIO.update('none');
+
+  // Partitions
+  document.getElementById('partition-list').innerHTML=partitions.map(p=>{
+    const pct=Math.round((p.used/p.total)*100);
+    const col=pct>=80?'var(--red)':pct>=60?'var(--amber)':'var(--green)';
+    const usedStr=p.total>=10?`${fmt(p.used,0)} GB`:`${fmt(p.used*1024,0)} MB`;
+    const totStr=p.total>=10?`${p.total} GB`:`${p.total*1024} MB`;
+    return `<div class="disk-part">
+      <div class="disk-part-head">
+        <span class="disk-part-name">${p.name}</span>
+        <span class="disk-part-vals" style="color:${col}">${pct}% &nbsp;${usedStr} / ${totStr}</span>
+      </div>
+      <div class="disk-bar"><div class="disk-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+
+  // Danger alerts
+  const dds=document.getElementById('disk-danger-section');
+  const dal=document.getElementById('disk-alert-list');
+  if(diskAlerts.length>0){dds.style.display='block';dal.innerHTML=diskAlerts.map(alertItemHTML).join('');}
+  else dds.style.display='none';
+
+  // Top disk processes
+  const top=getSorted(procs,'disk','desc').slice(0,10);
+  document.getElementById('disk-proc-tbody').innerHTML=top.map(p=>procRowHTML(p,'disk')).join('');
+  renderLog('log-disk',diskLogs,20);
+}
+
+// ══════════════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════════════
+let currentPage='dashboard';
+function navigate(page){
+  currentPage=page;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>{
+    b.classList.toggle('active',b.textContent.toLowerCase().includes(page));
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// CLOCK
+// ══════════════════════════════════════════════════════════════
+function updateClock(){
+  document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB');
+}
+
+// ══════════════════════════════════════════════════════════════
+// MAIN RENDER LOOP
+// ══════════════════════════════════════════════════════════════
+function renderAll(){
+  renderDashboard();
+  if(currentPage==='cpu') renderCPUPage();
+  if(currentPage==='memory') renderMemPage();
+  if(currentPage==='disk') renderDiskPage();
+}
+
+// Override navigate to also trigger render
+const _nav=navigate;
+window.navigate=function(page){
+  _nav(page);
+  updateSim();
+  renderAll();
+  if(page==='cpu') renderCPUPage();
+  if(page==='memory') renderMemPage();
+  if(page==='disk') renderDiskPage();
+};
+
+// Seed initial logs
+generateLogs();generateLogs();generateLogs();
+checkAlerts();
+
+// Start loop
+setInterval(()=>{updateSim();renderAll();updateClock();},CFG.TICK);
+updateClock();
+renderAll();
+
+// Initial sort set to cpu desc
+setSort('cpu');
+</script>
+</body>
+</html>

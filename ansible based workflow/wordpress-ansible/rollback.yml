@@ -1,0 +1,104 @@
+---
+# =============================================================
+# ROLLBACK PLAYBOOK — Completely remove the WordPress installation
+# Usage: ansible-playbook -i inventory/hosts.ini rollback.yml
+# WARNING: This will DELETE all website data, the DB, and the user!
+# =============================================================
+
+- name: "Rollback — Remove WordPress installation"
+  hosts: wordpress_servers
+  become: true
+  gather_facts: false
+
+  vars_prompt:
+    - name: confirm_rollback
+      prompt: "Type YES to confirm complete rollback (this is DESTRUCTIVE)"
+      private: false
+
+  tasks:
+
+    - name: "ROLLBACK | Abort if not confirmed"
+      ansible.builtin.fail:
+        msg: "Rollback cancelled. You must type YES to confirm."
+      when: confirm_rollback != "YES"
+
+    - name: "ROLLBACK | Stop all services"
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - nginx
+        - php-fpm
+        - mariadb
+      ignore_errors: true
+
+    - name: "ROLLBACK | Drop WordPress database"
+      community.mysql.mysql_db:
+        name: "{{ db_name }}"
+        state: absent
+        login_unix_socket: /var/lib/mysql/mysql.sock
+      ignore_errors: true
+
+    - name: "ROLLBACK | Remove WordPress database user"
+      community.mysql.mysql_user:
+        name: "{{ db_user }}"
+        host: localhost
+        state: absent
+        login_unix_socket: /var/lib/mysql/mysql.sock
+      ignore_errors: true
+
+    - name: "ROLLBACK | Revoke SSL certificate"
+      ansible.builtin.command:
+        cmd: "certbot delete --cert-name {{ domain }} --non-interactive"
+      ignore_errors: true
+
+    - name: "ROLLBACK | Remove website user and home directory"
+      ansible.builtin.user:
+        name: "{{ wp_username }}"
+        state: absent
+        remove: true
+        force: true
+
+    - name: "ROLLBACK | Remove Nginx site configs"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/etc/nginx/conf.d/{{ wp_sitename }}.conf"
+        - "/etc/nginx/conf.d/{{ wp_sitename }}_temp.conf"
+        - "/etc/nginx/conf.d/phpmyadmin.conf"
+        - "/etc/nginx/.htpasswd"
+
+    - name: "ROLLBACK | Remove PHP-FPM pool config"
+      ansible.builtin.file:
+        path: "/etc/php-fpm.d/{{ wp_username }}.conf"
+        state: absent
+
+    - name: "ROLLBACK | Remove phpMyAdmin"
+      ansible.builtin.file:
+        path: /usr/share/phpmyadmin
+        state: absent
+
+    - name: "ROLLBACK | Re-enable default PHP-FPM pool"
+      ansible.builtin.command:
+        cmd: "mv /etc/php-fpm.d/www.conf.disabled /etc/php-fpm.d/www.conf"
+      ignore_errors: true
+
+    - name: "ROLLBACK | Remove WP-CLI"
+      ansible.builtin.file:
+        path: /usr/local/bin/wp
+        state: absent
+
+    - name: "ROLLBACK | Restart remaining services"
+      ansible.builtin.service:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - nginx
+        - php-fpm
+        - mariadb
+      ignore_errors: true
+
+    - name: "ROLLBACK | Rollback complete"
+      ansible.builtin.debug:
+        msg: "✅ Rollback complete. All WordPress components have been removed."

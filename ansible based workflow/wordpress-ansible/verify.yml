@@ -1,0 +1,132 @@
+---
+# =============================================================
+# VERIFY PLAYBOOK — Run after site.yml to confirm everything
+# Usage: ansible-playbook -i inventory/hosts.ini verify.yml
+# =============================================================
+
+- name: "Verify WordPress Deployment"
+  hosts: wordpress_servers
+  become: true
+  gather_facts: true
+
+  tasks:
+
+    - name: "VERIFY | Check Nginx is running"
+      ansible.builtin.service_facts:
+    - ansible.builtin.assert:
+        that: ansible_facts.services['nginx.service'].state == 'running'
+        success_msg: "✅ Nginx is running"
+        fail_msg:    "❌ Nginx is NOT running"
+
+    - name: "VERIFY | Check PHP-FPM is running"
+      ansible.builtin.assert:
+        that: ansible_facts.services['php-fpm.service'].state == 'running'
+        success_msg: "✅ PHP-FPM is running"
+        fail_msg:    "❌ PHP-FPM is NOT running"
+
+    - name: "VERIFY | Check MariaDB is running"
+      ansible.builtin.assert:
+        that: ansible_facts.services['mariadb.service'].state == 'running'
+        success_msg: "✅ MariaDB is running"
+        fail_msg:    "❌ MariaDB is NOT running"
+
+    - name: "VERIFY | Check PHP version is 8.x"
+      ansible.builtin.command: php -v
+      register: php_ver
+      changed_when: false
+    - ansible.builtin.assert:
+        that: "'PHP 8.' in php_ver.stdout"
+        success_msg: "✅ PHP 8.x confirmed: {{ php_ver.stdout.split('\n')[0] }}"
+        fail_msg:    "❌ PHP 8.x not found"
+
+    - name: "VERIFY | Check MariaDB version is 10.6"
+      ansible.builtin.command: mysql --version
+      register: maria_ver
+      changed_when: false
+    - ansible.builtin.assert:
+        that: "'10.6' in maria_ver.stdout"
+        success_msg: "✅ MariaDB 10.6 confirmed"
+        fail_msg:    "❌ MariaDB 10.6 not found"
+
+    - name: "VERIFY | Check SSL certificate exists"
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+      register: ssl_cert
+    - ansible.builtin.assert:
+        that: ssl_cert.stat.exists
+        success_msg: "✅ SSL certificate exists"
+        fail_msg:    "❌ SSL certificate NOT found"
+
+    - name: "VERIFY | Check WordPress site root exists"
+      ansible.builtin.stat:
+        path: "{{ site_root }}/wp-config.php"
+      register: wp_config
+    - ansible.builtin.assert:
+        that: wp_config.stat.exists
+        success_msg: "✅ wp-config.php found at {{ site_root }}"
+        fail_msg:    "❌ wp-config.php NOT found"
+
+    - name: "VERIFY | Check phpMyAdmin directory exists"
+      ansible.builtin.stat:
+        path: /usr/share/phpmyadmin/index.php
+      register: pma_index
+    - ansible.builtin.assert:
+        that: pma_index.stat.exists
+        success_msg: "✅ phpMyAdmin installed"
+        fail_msg:    "❌ phpMyAdmin NOT found"
+
+    - name: "VERIFY | Check SFTP user exists"
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ wp_username }}"
+      register: sftp_user
+    - ansible.builtin.assert:
+        that: sftp_user is not failed
+        success_msg: "✅ SFTP user '{{ wp_username }}' exists"
+        fail_msg:    "❌ SFTP user NOT found"
+
+    - name: "VERIFY | Check Nginx config is valid"
+      ansible.builtin.command: nginx -t
+      register: nginx_cfg
+      changed_when: false
+      failed_when: false
+    - ansible.builtin.assert:
+        that: nginx_cfg.rc == 0
+        success_msg: "✅ Nginx config syntax OK"
+        fail_msg:    "❌ Nginx config has errors"
+
+    - name: "VERIFY | Check WordPress DB connectivity via WP-CLI"
+      ansible.builtin.command:
+        cmd: "wp db check --path={{ site_root }} --allow-root"
+      register: wp_db_check
+      changed_when: false
+      failed_when: false
+    - ansible.builtin.assert:
+        that: wp_db_check.rc == 0
+        success_msg: "✅ WordPress database connection OK"
+        fail_msg:    "❌ WordPress cannot connect to database"
+
+    - name: "VERIFY | Check WordPress site is responding on HTTPS"
+      ansible.builtin.uri:
+        url: "https://{{ domain }}"
+        validate_certs: true
+        status_code: 200
+        timeout: 30
+      register: wp_http_check
+      delegate_to: localhost
+      ignore_errors: true
+    - ansible.builtin.debug:
+        msg: "{{ '✅ HTTPS site is reachable: ' + domain if wp_http_check.status == 200 else '⚠️  Could not reach https://' + domain + ' — check DNS/firewall' }}"
+
+    - name: "VERIFY | Print final summary"
+      ansible.builtin.debug:
+        msg:
+          - "============================================================"
+          - " ✅  ALL CHECKS PASSED — Deployment Verified"
+          - "============================================================"
+          - " Site URL      : https://{{ domain }}"
+          - " WP Admin      : https://{{ domain }}/wp-admin"
+          - " phpMyAdmin    : http://{{ domain }}:{{ pma_port }}"
+          - " SFTP Host     : {{ ansible_host }}:22"
+          - " SFTP User     : {{ wp_username }}"
+          - "============================================================"

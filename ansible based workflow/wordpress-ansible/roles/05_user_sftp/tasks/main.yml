@@ -1,0 +1,133 @@
+---
+# =============================================================
+# ROLE: 05_user_sftp — Create user, directories, and SFTP access
+# =============================================================
+
+# ── Create User and Groups ────────────────────────────────────
+
+- name: "SFTP | Create sftpusers group"
+  ansible.builtin.group:
+    name: sftpusers
+    state: present
+
+- name: "SFTP | Create website user with home at /home/{{ wp_username }}"
+  ansible.builtin.user:
+    name: "{{ wp_username }}"
+    home: "/home/{{ wp_username }}"
+    shell: /bin/bash
+    create_home: true
+    groups: sftpusers
+    append: true
+    state: present
+
+- name: "SFTP | Set user password"
+  ansible.builtin.user:
+    name: "{{ wp_username }}"
+    password: "{{ wp_user_password | password_hash('sha512') }}"
+    update_password: always
+
+# ── Create Directory Structure ────────────────────────────────
+
+- name: "SFTP | Create website public directory — /home/{{ wp_username }}/{{ wp_sitename }}/public"
+  ansible.builtin.file:
+    path: "{{ site_root }}"
+    state: directory
+    owner: "{{ wp_username }}"
+    group: "{{ wp_username }}"
+    mode: '0755'
+
+- name: "SFTP | Create logs directory"
+  ansible.builtin.file:
+    path: "{{ site_logs }}"
+    state: directory
+    owner: "{{ wp_username }}"
+    group: "{{ wp_username }}"
+    mode: '0755'
+
+- name: "SFTP | Create tmp directory for PHP sessions"
+  ansible.builtin.file:
+    path: "{{ site_tmp }}"
+    state: directory
+    owner: "{{ wp_username }}"
+    group: "{{ wp_username }}"
+    mode: '0700'
+
+# ── Fix ChrootDirectory Ownership (Required for SFTP chroot) ──
+
+- name: "SFTP | Set /home/{{ wp_username }} ownership to root (required for chroot)"
+  ansible.builtin.file:
+    path: "/home/{{ wp_username }}"
+    owner: root
+    group: root
+    mode: '0755'
+
+# ── Set SELinux Context ───────────────────────────────────────
+
+- name: "SFTP | Set SELinux context — writable web content"
+  community.general.sefcontext:
+    target: "{{ item }}(/.*)?"
+    setype: httpd_sys_rw_content_t
+    state: present
+  loop:
+    - "{{ site_root }}/wp-content"
+    - "{{ site_tmp }}"
+    - "{{ site_logs }}"
+
+- name: "SFTP | Apply SELinux contexts"
+  ansible.builtin.command:
+    cmd: "restorecon -Rv {{ site_root }}"
+  changed_when: true
+
+# ── Configure SFTP in sshd_config ────────────────────────────
+
+- name: "SFTP | Ensure Subsystem is set to internal-sftp"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?Subsystem\s+sftp'
+    line: 'Subsystem sftp internal-sftp'
+    state: present
+  notify: restart sshd
+
+- name: "SFTP | Enable password authentication (required for SFTP password login)"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: 'PasswordAuthentication yes'
+    state: present
+  notify: restart sshd
+
+- name: "SFTP | Add sftpusers chroot block to sshd_config"
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} ANSIBLE MANAGED — SFTP chroot for sftpusers"
+    block: |
+      Match Group sftpusers
+          ChrootDirectory /home/%u
+          ForceCommand internal-sftp
+          AllowTcpForwarding no
+          X11Forwarding no
+          PasswordAuthentication yes
+    state: present
+  notify: restart sshd
+
+- name: "SFTP | Validate sshd_config syntax"
+  ansible.builtin.command:
+    cmd: sshd -t
+  register: sshd_test
+  changed_when: false
+  failed_when: sshd_test.rc != 0
+
+- name: "SFTP | Restart sshd to apply changes"
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+
+- name: "SFTP | Print SFTP credentials"
+  ansible.builtin.debug:
+    msg:
+      - "SFTP Host     : {{ ansible_host }}"
+      - "SFTP Port     : 22"
+      - "SFTP Username : {{ wp_username }}"
+      - "SFTP Password : {{ wp_user_password }}"
+      - "SFTP Root Dir : /{{ wp_sitename }}/public"
+      - "(ChrootDirectory is /home/{{ wp_username }})"

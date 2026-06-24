@@ -1,0 +1,35 @@
+[Unit]
+Description=SysWatch Metrics API — health-monitor dashboard backend
+Documentation=file:///home/%i/health-monitor/README.md
+After=network.target
+
+[Service]
+# ── Replace 'student' with your actual Linux username ──
+User=student
+Group=student
+WorkingDirectory=/home/student/health-monitor/api
+
+# Strict localhost binding — never exposed to network
+ExecStart=/usr/bin/python3 /home/student/health-monitor/api/metrics_api.py
+
+# Auto-restart on failure
+Restart=on-failure
+RestartSec=5s
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/home/student/health-monitor/logs
+ReadOnlyPaths=/home/student/health-monitor/api
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+# Logging goes to journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=syswatch-api
+
+[Install]
+WantedBy=multi-user.target

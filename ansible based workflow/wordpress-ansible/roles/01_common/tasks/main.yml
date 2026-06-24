@@ -1,0 +1,126 @@
+---
+# =============================================================
+# ROLE: 01_common — System baseline setup
+# =============================================================
+
+- name: "COMMON | Set hostname"
+  ansible.builtin.hostname:
+    name: wordpress-server
+
+- name: "COMMON | Set timezone to Asia/Kolkata"
+  community.general.timezone:
+    name: Asia/Kolkata
+
+- name: "COMMON | Update all packages to latest"
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    update_cache: true
+
+- name: "COMMON | Install baseline utilities"
+  ansible.builtin.dnf:
+    name:
+      - wget
+      - curl
+      - tar
+      - unzip
+      - vim
+      - nano
+      - htop
+      - net-tools
+      - bind-utils
+      - policycoreutils-python-utils   # for semanage
+      - python3-libsemanage            # SELinux management
+      - httpd-tools                    # for htpasswd
+      - openssl
+    state: present
+
+- name: "COMMON | Install EPEL repository"
+  ansible.builtin.dnf:
+    name: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
+    state: present
+    disable_gpg_check: true
+
+- name: "COMMON | Enable EPEL repository"
+  ansible.builtin.command:
+    cmd: dnf config-manager --enable epel
+  changed_when: true
+
+- name: "COMMON | Install Remi repository (for PHP 8.x)"
+  ansible.builtin.dnf:
+    name: "https://rpms.remirepo.net/enterprise/remi-release-9.rpm"
+    state: present
+    disable_gpg_check: true
+
+- name: "COMMON | Create swap file (2 GB — critical for t2.micro)"
+  ansible.builtin.command:
+    cmd: fallocate -l 2G /swapfile
+    creates: /swapfile
+
+- name: "COMMON | Set swap file permissions"
+  ansible.builtin.file:
+    path: /swapfile
+    mode: '0600'
+    owner: root
+    group: root
+
+- name: "COMMON | Format swap file"
+  ansible.builtin.command:
+    cmd: mkswap /swapfile
+  register: mkswap_result
+  changed_when: mkswap_result.rc == 0
+  failed_when: false
+
+- name: "COMMON | Enable swap"
+  ansible.builtin.command:
+    cmd: swapon /swapfile
+  register: swapon_result
+  changed_when: swapon_result.rc == 0
+  failed_when: false
+
+- name: "COMMON | Make swap permanent in /etc/fstab"
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    line: '/swapfile none swap sw 0 0'
+    state: present
+
+- name: "COMMON | Configure SELinux booleans for web hosting"
+  ansible.posix.seboolean:
+    name: "{{ item }}"
+    state: true
+    persistent: true
+  loop:
+    - httpd_read_user_content
+    - httpd_enable_homedirs
+    - httpd_can_network_connect
+    - httpd_execmem
+
+- name: "COMMON | Configure firewall — allow HTTP"
+  ansible.posix.firewalld:
+    service: http
+    permanent: true
+    state: enabled
+    immediate: true
+  ignore_errors: true
+
+- name: "COMMON | Configure firewall — allow HTTPS"
+  ansible.posix.firewalld:
+    service: https
+    permanent: true
+    state: enabled
+    immediate: true
+  ignore_errors: true
+
+- name: "COMMON | Configure firewall — allow phpMyAdmin port"
+  ansible.posix.firewalld:
+    port: "{{ pma_port }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+  ignore_errors: true
+
+- name: "COMMON | Reload firewalld"
+  ansible.builtin.service:
+    name: firewalld
+    state: reloaded
+  ignore_errors: true
