@@ -1,4 +1,4 @@
-# Hi 👋🏼 I'm Sameer Malik — Assignment Portfolio
+# Hi 👋🏼 I'm Sameer Malik and this is my Assignment Portfolio
 
 ---
 
